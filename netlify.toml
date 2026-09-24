@@ -1,6 +1,7 @@
 [build]
-    publish = "build/web"
-    functions = "netlify/functions"
+  command = "bash build.sh"
+  publish = "build/web"
+  functions = "netlify/functions"
 
 [[redirects]]
   from = "/*"
