@@ -1,0 +1,16 @@
+[[redirects]]
+  from = "/api/overpass"
+  to = "https://overpass-api.de/api/interpreter"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/overpass-kumi"
+  to = "https://overpass.kumi.system/api/interpreter"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
