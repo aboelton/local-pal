@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -381,7 +383,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int selectedIndex = 0;
-
   City selectedCity = popularCities[0];
 
   void selectCity(City city) {
@@ -465,24 +466,6 @@ class HomeContent extends StatelessWidget {
               'Local Pal',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        tr(
-                          'لا توجد إشعارات جديدة',
-                          'No new notifications',
-                          'אין התראות חדשות',
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
           ),
           SliverPadding(
             padding: const EdgeInsets.all(16),
@@ -506,13 +489,29 @@ class HomeContent extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 SearchButton(city: city),
+                const SizedBox(height: 12),
+
+                // CURRENT LOCATION BUTTON
+                CurrentLocationButton(
+                  onLocationFound: (position) {
+                    onCityChanged(
+                      City(
+                        name: 'Current Location',
+                        displayName: tr(
+                          'موقعي الحالي',
+                          'My current location',
+                          'המיקום הנוכחי שלי',
+                        ),
+                        lat: position.latitude,
+                        lon: position.longitude,
+                      ),
+                    );
+                  },
+                ),
+
                 const SizedBox(height: 24),
                 Text(
-                  tr(
-                    'التصنيفات',
-                    'Categories',
-                    'קטגוריות',
-                  ),
+                  tr('التصنيفات', 'Categories', 'קטגוריות'),
                   style: Theme.of(context)
                       .textTheme
                       .titleLarge
@@ -577,6 +576,9 @@ class CitySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCurrentLocation =
+        city.name == 'Current Location';
+
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -596,8 +598,12 @@ class CitySelector extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              const CircleAvatar(
-                child: Icon(Icons.location_on),
+              CircleAvatar(
+                child: Icon(
+                  isCurrentLocation
+                      ? Icons.my_location
+                      : Icons.location_on,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -606,11 +612,12 @@ class CitySelector extends StatelessWidget {
                   children: [
                     Text(
                       tr(
-                        'الموقع الحالي',
-                        'Current location',
-                        'מיקום נוכחי',
+                        'الموقع',
+                        'Location',
+                        'מיקום',
                       ),
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style:
+                          Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -661,9 +668,8 @@ class SearchButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Theme.of(context)
-              .colorScheme
-              .surfaceContainerHighest,
+          color:
+              Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
@@ -800,7 +806,6 @@ class _CitySearchPageState extends State<CitySearchPage> {
       }
 
       final data = jsonDecode(response.body);
-
       final found = <City>[];
 
       if (data is List) {
@@ -850,15 +855,17 @@ class _CitySearchPageState extends State<CitySearchPage> {
   }
 
   @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          tr(
-            'اختيار المدينة',
-            'Choose city',
-            'בחר עיר',
-          ),
+          tr('اختيار المدينة', 'Choose city', 'בחר עיר'),
         ),
       ),
       body: Column(
@@ -875,13 +882,6 @@ class _CitySearchPageState extends State<CitySearchPage> {
                   'חפש עיר...',
                 ),
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    controller.clear();
-                    searchCities('');
-                  },
-                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -1045,10 +1045,18 @@ class _PlacesPageState extends State<PlacesPage> {
 // ============================================================
 
 class PlacesService {
-  static const servers = <String>[
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.system/api/interpreter',
-  ];
+  static List<String> get servers {
+    if (kIsWeb) {
+      return <String>[
+        '${Uri.base.origin}/.netlify/functions/overpass',
+      ];
+    }
+
+    return <String>[
+      'https://local-pal.netlify.app/.netlify/functions/overpass',
+      'https://overpass-api.de/api/interpreter',
+    ];
+  }
 
   static Future<List<Place>> getPlaces({
     required City city,
@@ -1057,11 +1065,11 @@ class PlacesService {
     final filter = _categoryFilter(category.id);
 
     final query = '''
-[out:json][timeout:25];
+[out:json][timeout:15];
 (
-  node(around:10000,${city.lat},${city.lon})$filter;
-  way(around:10000,${city.lat},${city.lon})$filter;
-  relation(around:10000,${city.lat},${city.lon})$filter;
+  node(around:5000,${city.lat},${city.lon})$filter;
+  way(around:5000,${city.lat},${city.lon})$filter;
+  relation(around:5000,${city.lat},${city.lon})$filter;
 );
 out center tags;
 ''';
@@ -1078,32 +1086,42 @@ out center tags;
                 'Content-Type':
                     'application/x-www-form-urlencoded',
               },
-              body: {'data': query},
+              body: {
+                'data': query,
+              },
             )
-            .timeout(const Duration(seconds: 35));
+            .timeout(
+              const Duration(seconds: 30),
+            );
 
         if (response.statusCode != 200) {
-          lastError = 'HTTP ${response.statusCode}';
+          lastError =
+              'HTTP ${response.statusCode} from $server';
           continue;
         }
 
         final data = jsonDecode(response.body);
 
-        if (data is! Map || data['elements'] is! List) {
-          lastError = 'Invalid response';
+        if (data is! Map ||
+            data['elements'] is! List) {
+          lastError =
+              'Invalid response from $server';
           continue;
         }
 
         final result = <Place>[];
 
         for (final element in data['elements']) {
+          if (element is! Map) continue;
+
           final rawTags = element['tags'];
 
           final tags = rawTags is Map
               ? Map<String, dynamic>.from(rawTags)
               : <String, dynamic>{};
 
-          final name = '${tags['name'] ?? ''}'.trim();
+          final name =
+              '${tags['name'] ?? ''}'.trim();
 
           if (name.isEmpty) continue;
 
@@ -1112,39 +1130,60 @@ out center tags;
 
           if (element['lat'] != null &&
               element['lon'] != null) {
-            lat = double.tryParse('${element['lat']}');
-            lon = double.tryParse('${element['lon']}');
-          } else if (element['center'] is Map) {
             lat = double.tryParse(
-              '${element['center']['lat']}',
+              '${element['lat']}',
             );
+
             lon = double.tryParse(
-              '${element['center']['lon']}',
+              '${element['lon']}',
+            );
+          } else if (element['center'] is Map) {
+            final center =
+                Map<String, dynamic>.from(
+              element['center'],
+            );
+
+            lat = double.tryParse(
+              '${center['lat']}',
+            );
+
+            lon = double.tryParse(
+              '${center['lon']}',
             );
           }
 
-          if (lat == null || lon == null) continue;
+          if (lat == null || lon == null) {
+            continue;
+          }
 
           result.add(
             Place(
-              id: '${element['type']}_${element['id']}',
+              id:
+                  '${element['type']}_${element['id']}',
               name: name,
               category: category.id,
               lat: lat,
               lon: lon,
-              address: _addressFromTags(tags),
+              address:
+                  _addressFromTags(tags),
               phone:
                   '${tags['phone'] ?? tags['contact:phone'] ?? ''}',
               website:
                   '${tags['website'] ?? tags['contact:website'] ?? ''}',
-              hours: '${tags['opening_hours'] ?? ''}',
-              imageUrl: '${tags['image'] ?? ''}',
+              hours:
+                  '${tags['opening_hours'] ?? ''}',
+              imageUrl:
+                  '${tags['image'] ?? ''}',
               rating:
-                  double.tryParse('${tags['rating'] ?? 0}') ?? 0,
-              ratingCount: int.tryParse(
-                    '${tags['rating:count'] ?? 0}',
-                  ) ??
-                  0,
+                  double.tryParse(
+                        '${tags['rating'] ?? 0}',
+                      ) ??
+                      0,
+              ratingCount:
+                  int.tryParse(
+                        '${tags['rating:count'] ?? 0}',
+                      ) ??
+                      0,
             ),
           );
         }
@@ -1190,14 +1229,18 @@ out center tags;
 
     final street =
         '${tags['addr:street'] ?? ''}'.trim();
+
     final house =
         '${tags['addr:housenumber'] ?? ''}'.trim();
+
     final city =
         '${tags['addr:city'] ?? ''}'.trim();
 
     if (street.isNotEmpty) {
       parts.add(
-        house.isNotEmpty ? '$street $house' : street,
+        house.isNotEmpty
+            ? '$street $house'
+            : street,
       );
     }
 
@@ -1212,58 +1255,85 @@ out center tags;
     switch (id) {
       case 'restaurant':
         return '[amenity=restaurant]';
+
       case 'cafe':
         return '[amenity=cafe]';
+
       case 'fast_food':
         return '[amenity=fast_food]';
+
       case 'bakery':
         return '[shop=bakery]';
+
       case 'supermarket':
         return '[shop=supermarket]';
+
       case 'shop':
         return '[shop]';
+
       case 'clothes':
         return '[shop=clothes]';
+
       case 'electronics':
         return '[shop=electronics]';
+
       case 'hotel':
         return '[tourism=hotel]';
+
       case 'park':
         return '[leisure=park]';
+
       case 'cinema':
         return '[amenity=cinema]';
+
       case 'gym':
         return '[leisure=fitness_centre]';
+
       case 'hospital':
         return '[amenity=hospital]';
+
       case 'clinic':
         return '[amenity=clinic]';
+
       case 'pharmacy':
         return '[amenity=pharmacy]';
+
       case 'dentist':
         return '[amenity=dentist]';
+
       case 'doctor':
         return '[amenity=doctors]';
+
       case 'fuel':
         return '[amenity=fuel]';
+
       case 'barber':
         return '[shop=hairdresser]';
+
       case 'bank':
         return '[amenity=bank]';
+
       case 'atm':
         return '[amenity=atm]';
+
       case 'mall':
         return '[shop=mall]';
+
       case 'mosque':
         return '[amenity=place_of_worship][religion=muslim]';
+
       case 'church':
         return '[amenity=place_of_worship][religion=christian]';
+
       case 'school':
         return '[amenity=school]';
+
       case 'university':
         return '[amenity=university]';
+
       case 'parking':
         return '[amenity=parking]';
+
       default:
         return '[name]';
     }
@@ -1373,8 +1443,7 @@ class _PlaceCardState extends State<PlaceCard> {
                           ),
                           const SizedBox(width: 3),
                           Text(
-                            widget.place.rating
-                                .toStringAsFixed(1),
+                            widget.place.rating.toStringAsFixed(1),
                           ),
                         ],
                       ],
@@ -1387,14 +1456,12 @@ class _PlaceCardState extends State<PlaceCard> {
                   widget.place.isFavorite
                       ? Icons.favorite
                       : Icons.favorite_border,
-                  color: widget.place.isFavorite
-                      ? Colors.red
-                      : null,
+                  color:
+                      widget.place.isFavorite ? Colors.red : null,
                 ),
                 onPressed: () {
                   setState(() {
-                    if (favoriteIds
-                        .contains(widget.place.id)) {
+                    if (widget.place.isFavorite) {
                       favoriteIds.remove(widget.place.id);
                     } else {
                       favoriteIds.add(widget.place.id);
@@ -1453,9 +1520,8 @@ class PlaceImage extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceContainerHighest,
+        color:
+            Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Icon(
@@ -1530,8 +1596,7 @@ class _PlaceDetailsPageState
 
   @override
   Widget build(BuildContext context) {
-    final category =
-        getCategory(widget.place.category);
+    final category = getCategory(widget.place.category);
 
     return Scaffold(
       appBar: AppBar(
@@ -1548,14 +1613,12 @@ class _PlaceDetailsPageState
               widget.place.isFavorite
                   ? Icons.favorite
                   : Icons.favorite_border,
-              color: widget.place.isFavorite
-                  ? Colors.red
-                  : null,
+              color:
+                  widget.place.isFavorite ? Colors.red : null,
             ),
             onPressed: () {
               setState(() {
-                if (favoriteIds
-                    .contains(widget.place.id)) {
+                if (widget.place.isFavorite) {
                   favoriteIds.remove(widget.place.id);
                 } else {
                   favoriteIds.add(widget.place.id);
@@ -1600,8 +1663,7 @@ class _PlaceDetailsPageState
                 ),
                 const SizedBox(width: 5),
                 Text(
-                  widget.place.rating
-                      .toStringAsFixed(1),
+                  widget.place.rating.toStringAsFixed(1),
                 ),
               ],
             ),
@@ -1610,21 +1672,13 @@ class _PlaceDetailsPageState
           if (widget.place.address.isNotEmpty)
             DetailRow(
               icon: Icons.location_on,
-              title: tr(
-                'العنوان',
-                'Address',
-                'כתובת',
-              ),
+              title: tr('العنوان', 'Address', 'כתובת'),
               value: widget.place.address,
             ),
           if (widget.place.phone.isNotEmpty)
             DetailRow(
               icon: Icons.phone,
-              title: tr(
-                'الهاتف',
-                'Phone',
-                'טלפון',
-              ),
+              title: tr('الهاتف', 'Phone', 'טלפון'),
               value: widget.place.phone,
             ),
           if (widget.place.hours.isNotEmpty)
@@ -1656,11 +1710,7 @@ class _PlaceDetailsPageState
               onPressed: callPlace,
               icon: const Icon(Icons.phone),
               label: Text(
-                tr(
-                  'اتصال',
-                  'Call',
-                  'התקשר',
-                ),
+                tr('اتصال', 'Call', 'התקשר'),
               ),
             ),
           if (widget.place.website.isNotEmpty)
@@ -1668,11 +1718,7 @@ class _PlaceDetailsPageState
               onPressed: openWebsite,
               icon: const Icon(Icons.language),
               label: Text(
-                tr(
-                  'الموقع الإلكتروني',
-                  'Website',
-                  'אתר',
-                ),
+                tr('الموقع الإلكتروني', 'Website', 'אתר'),
               ),
             ),
         ],
@@ -1756,11 +1802,7 @@ class MapPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          tr(
-            'الخريطة',
-            'Map',
-            'מפה',
-          ),
+          tr('الخريطة', 'Map', 'מפה'),
         ),
         actions: [
           IconButton(
@@ -1791,13 +1833,15 @@ class OSMMapView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const zoom = 12;
+
     return Stack(
       children: [
         Positioned.fill(
           child: Image.network(
-            'https://tile.openstreetmap.org/12/'
-            '${_tileX(city.lon, 12)}/'
-            '${_tileY(city.lat, 12)}.png',
+            'https://tile.openstreetmap.org/$zoom/'
+            '${_tileX(city.lon, zoom)}/'
+            '${_tileY(city.lat, zoom)}.png',
             fit: BoxFit.cover,
             errorBuilder: (
               context,
@@ -1837,8 +1881,7 @@ class OSMMapView extends StatelessWidget {
     final n = pow(2, zoom).toDouble();
 
     final y = (1 -
-            log(tan(latRad) + 1 / cos(latRad)) /
-                pi) /
+            log(tan(latRad) + 1 / cos(latRad)) / pi) /
         2 *
         n;
 
@@ -1918,11 +1961,13 @@ class _SearchPageState extends State<SearchPage> {
           found.add(
             Place(
               id: 'search_${item['place_id']}',
-              name: '${item['display_name'] ?? query}',
+              name:
+                  '${item['display_name'] ?? query}',
               category: 'shop',
               lat: lat,
               lon: lon,
-              address: '${item['display_name'] ?? ''}',
+              address:
+                  '${item['display_name'] ?? ''}',
             ),
           );
         }
@@ -1966,11 +2011,7 @@ class _SearchPageState extends State<SearchPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          tr(
-            'البحث',
-            'Search',
-            'חיפוש',
-          ),
+          tr('البحث', 'Search', 'חיפוש'),
         ),
       ),
       body: SafeArea(
@@ -1980,7 +2021,8 @@ class _SearchPageState extends State<SearchPage> {
               padding: const EdgeInsets.all(16),
               child: TextField(
                 controller: controller,
-                textInputAction: TextInputAction.search,
+                textInputAction:
+                    TextInputAction.search,
                 onSubmitted: (_) => search(),
                 decoration: InputDecoration(
                   hintText: tr(
@@ -1988,13 +2030,17 @@ class _SearchPageState extends State<SearchPage> {
                     'Search for a place...',
                     'חפש מקום...',
                   ),
-                  prefixIcon: const Icon(Icons.search),
+                  prefixIcon:
+                      const Icon(Icons.search),
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.arrow_forward),
+                    icon: const Icon(
+                      Icons.arrow_forward,
+                    ),
                     onPressed: search,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius:
+                        BorderRadius.circular(18),
                   ),
                 ),
               ),
@@ -2013,9 +2059,11 @@ class _SearchPageState extends State<SearchPage> {
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.all(12),
+                      padding:
+                          const EdgeInsets.all(12),
                       itemCount: results.length,
-                      itemBuilder: (context, index) {
+                      itemBuilder:
+                          (context, index) {
                         return PlaceCard(
                           place: results[index],
                           city: widget.city,
@@ -2029,6 +2077,7 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 }
+
 // ============================================================
 // FAVORITES
 // ============================================================
@@ -2382,6 +2431,145 @@ class ErrorView extends StatelessWidget {
 }
 
 // ============================================================
+// CURRENT LOCATION
+// ============================================================
+
+class CurrentLocationService {
+  static Future<Position?> getCurrentLocation() async {
+    try {
+      final serviceEnabled =
+          await Geolocator.isLocationServiceEnabled();
+
+      if (!serviceEnabled) {
+        return null;
+      }
+
+      var permission =
+          await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission =
+            await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission ==
+              LocationPermission.deniedForever) {
+        return null;
+      }
+
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+// ============================================================
+// CURRENT LOCATION BUTTON
+// ============================================================
+
+class CurrentLocationButton extends StatefulWidget {
+  final ValueChanged<Position> onLocationFound;
+
+  const CurrentLocationButton({
+    super.key,
+    required this.onLocationFound,
+  });
+
+  @override
+  State<CurrentLocationButton> createState() =>
+      _CurrentLocationButtonState();
+}
+
+class _CurrentLocationButtonState
+    extends State<CurrentLocationButton> {
+  bool loading = false;
+
+  Future<void> getLocation() async {
+    if (loading) return;
+
+    setState(() {
+      loading = true;
+    });
+
+    final position =
+        await CurrentLocationService.getCurrentLocation();
+
+    if (!mounted) return;
+
+    setState(() {
+      loading = false;
+    });
+
+    if (position == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              'تعذر الحصول على موقعك. تأكد من تشغيل الموقع والسماح للتطبيق باستخدامه.',
+              'Could not get your location. Make sure location is enabled and permission is allowed.',
+              'לא ניתן לקבל את המיקום שלך. ודא שהמיקום מופעל ואושר.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    widget.onLocationFound(position);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          tr(
+            'تم تحديد موقعك الحالي 📍',
+            'Your current location was found 📍',
+            'המיקום הנוכחי שלך נמצא 📍',
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: loading ? null : getLocation,
+        icon: loading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                ),
+              )
+            : const Icon(Icons.my_location),
+        label: Text(
+          loading
+              ? tr(
+                  'جاري تحديد الموقع...',
+                  'Finding location...',
+                  'מאתר מיקום...',
+                )
+              : tr(
+                  'استخدم موقعي الحالي',
+                  'Use my current location',
+                  'השתמש במיקום הנוכחי שלי',
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
 // HELPERS
 // ============================================================
 
@@ -2413,6 +2601,7 @@ double calculateDistance(
 
   final dLat =
       _degreesToRadians(lat2 - lat1);
+
   final dLon =
       _degreesToRadians(lon2 - lon1);
 
@@ -2421,10 +2610,11 @@ double calculateDistance(
           cos(_degreesToRadians(lat2)) *
           pow(sin(dLon / 2), 2);
 
-  final c = 2 * atan2(
-    sqrt(a),
-    sqrt(1 - a),
-  );
+  final c = 2 *
+      atan2(
+        sqrt(a),
+        sqrt(1 - a),
+      );
 
   return earthRadius * c;
 }
