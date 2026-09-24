@@ -4,9 +4,9 @@ set -e
 
 echo "Installing Flutter..."
 
-git clone https://github.com/flutter/flutter.git --depth 1 --branch stable /opt/flutter
+git clone https://github.com/flutter/flutter.git --depth 1 --branch stable "$HOME/flutter"
 
-export PATH="/opt/flutter/bin:$PATH"
+export PATH="$HOME/flutter/bin:$PATH"
 
 flutter --version
 
