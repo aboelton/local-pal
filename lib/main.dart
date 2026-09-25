@@ -443,8 +443,8 @@ class _HomePageState extends State<HomePage> {
 
 // ============================================================
 // HOME CONTENT
-
 // ============================================================
+
 class HomeContent extends StatelessWidget {
   final ValueChanged<City> onCityChanged;
   final City city;
@@ -554,7 +554,14 @@ class HomeContent extends StatelessWidget {
                       child: Card(
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
-                          onTap: () {},
+                          onTap: () {
+                          Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                          builder: (_) => const CurrencyPage(),
+                          ),
+                          );
+                          },
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Column(
@@ -616,7 +623,15 @@ class HomeContent extends StatelessWidget {
                       child: Card(
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
-                          onTap: () {},
+                          onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const TaxiPage(),
+    ),
+  );
+},
+  
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Column(
@@ -2808,3 +2823,525 @@ Future<void> openCityInGoogleMaps(
     mode: LaunchMode.externalApplication,
   );
 }
+// ============================================================
+// CURRENCY PAGE
+// ============================================================
+
+class CurrencyPage extends StatefulWidget {
+  const CurrencyPage({super.key});
+
+  @override
+  State<CurrencyPage> createState() => _CurrencyPageState();
+}
+
+class _CurrencyPageState extends State<CurrencyPage> {
+  final TextEditingController amountController =
+      TextEditingController(text: '1');
+
+  final List<String> currencies = [
+    'ILS',
+    'USD',
+    'EUR',
+    'GBP',
+    'JPY',
+    'CHF',
+    'CAD',
+    'AUD',
+    'CNY',
+    'AED',
+  ];
+
+  String fromCurrency = 'ILS';
+  String toCurrency = 'USD';
+
+  double? rate;
+  String? rateDate;
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    loadRate();
+  }
+
+  @override
+  void dispose() {
+    amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> loadRate() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+
+    try {
+      if (fromCurrency == toCurrency) {
+        setState(() {
+          rate = 1;
+          rateDate = DateTime.now().toString().substring(0, 10);
+          loading = false;
+        });
+        return;
+      }
+
+      final url = Uri.parse(
+        'https://api.frankfurter.dev/v2/rate/'
+        '${fromCurrency.toLowerCase()}/'
+        '${toCurrency.toLowerCase()}?providers=ecb',
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load exchange rate');
+      }
+
+      final data = jsonDecode(response.body);
+
+      setState(() {
+        rate = (data['rate'] as num).toDouble();
+        rateDate = data['date']?.toString();
+        loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        loading = false;
+        error = tr(
+          'تعذر تحميل سعر الصرف. تأكد من الإنترنت وحاول مرة أخرى.',
+          'Could not load the exchange rate. Check your internet and try again.',
+          'לא ניתן לטעון את שער החליפין. בדוק את האינטרנט ונסה שוב.',
+        );
+      });
+    }
+  }
+
+  double get convertedAmount {
+    final amount = double.tryParse(
+          amountController.text.replaceAll(',', '.'),
+        ) ??
+        0;
+
+    return amount * (rate ?? 0);
+  }
+
+  void swapCurrencies() {
+    setState(() {
+      final oldFrom = fromCurrency;
+      fromCurrency = toCurrency;
+      toCurrency = oldFrom;
+    });
+
+    loadRate();
+  }
+
+  String currencyName(String code) {
+    switch (code) {
+      case 'ILS':
+        return tr('شيكل إسرائيلي', 'Israeli Shekel', 'שקל ישראלי');
+      case 'USD':
+        return tr('دولار أمريكي', 'US Dollar', 'דולר אמריקאי');
+      case 'EUR':
+        return tr('يورو', 'Euro', 'אירו');
+      case 'GBP':
+        return tr('جنيه إسترليني', 'British Pound', 'לירה שטרלינג');
+      case 'JPY':
+        return tr('ين ياباني', 'Japanese Yen', 'ין יפני');
+      case 'CHF':
+        return tr('فرنك سويسري', 'Swiss Franc', 'פרנק שווייצרי');
+      case 'CAD':
+        return tr('دولار كندي', 'Canadian Dollar', 'דולר קנדי');
+      case 'AUD':
+        return tr('دولار أسترالي', 'Australian Dollar', 'דולר אוסטרלי');
+      case 'CNY':
+        return tr('يوان صيني', 'Chinese Yuan', 'יואן סיני');
+      case 'AED':
+        return tr('درهم إماراتي', 'UAE Dirham', 'דירהם אמירתי');
+      default:
+        return code;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final result = convertedAmount;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          tr(
+            'تحويل العملات',
+            'Currency Converter',
+            'ממיר מטבעות',
+          ),
+        ),
+        actions: [
+          IconButton(
+            onPressed: loading ? null : loadRate,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: loadRate,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Text(
+                      tr(
+                        'تحويل العملات',
+                        'Currency Converter',
+                        'ממיר מטבעות',
+                      ),
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
+                          ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    TextField(
+                      controller: amountController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      onChanged: (_) {
+                        setState(() {});
+                      },
+                      decoration: InputDecoration(
+                        labelText: tr(
+                          'المبلغ',
+                          'Amount',
+                          'סכום',
+                        ),
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    DropdownButtonFormField<String>(
+                      initialValue: fromCurrency,
+                      decoration: InputDecoration(
+                        labelText: tr(
+                          'من',
+                          'From',
+                          'מ',
+                        ),
+                        border: const OutlineInputBorder(),
+                      ),
+                      items: currencies.map((currency) {
+                        return DropdownMenuItem(
+                          value: currency,
+                          child: Text(
+                            '$currency — ${currencyName(currency)}',
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+
+                        setState(() {
+                          fromCurrency = value;
+                        });
+
+                        loadRate();
+                      },
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    IconButton(
+                      onPressed: loading
+                          ? null
+                          : swapCurrencies,
+                      icon: const Icon(
+                        Icons.swap_vert,
+                        size: 32,
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    DropdownButtonFormField<String>(
+                      initialValue: toCurrency,
+                      decoration: InputDecoration(
+                        labelText: tr(
+                          'إلى',
+                          'To',
+                          'אל',
+                        ),
+                        border: const OutlineInputBorder(),
+                      ),
+                      items: currencies.map((currency) {
+                        return DropdownMenuItem(
+                          value: currency,
+                          child: Text(
+                            '$currency — ${currencyName(currency)}',
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+
+                        setState(() {
+                          toCurrency = value;
+                        });
+
+                        loadRate();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            if (loading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(30),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (error != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        error!,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        onPressed: loadRate,
+                        icon: const Icon(Icons.refresh),
+                        label: Text(
+                          tr(
+                            'إعادة المحاولة',
+                            'Try again',
+                            'נסה שוב',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Text(
+                        '${amountController.text} $fromCurrency',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge,
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      const Icon(
+                        Icons.arrow_downward,
+                        size: 28,
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      Text(
+                        '${result.toStringAsFixed(2)} $toCurrency',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      Text(
+                        '1 $fromCurrency = '
+                        '${rate!.toStringAsFixed(6)} $toCurrency',
+                        textAlign: TextAlign.center,
+                      ),
+
+                      if (rateDate != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          tr(
+                            'تاريخ السعر: $rateDate',
+                            'Rate date: $rateDate',
+                            'תאריך השער: $rateDate',
+                          ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 20),
+
+            Text(
+              tr(
+                'الأسعار مرجعية وليست أسعار بيع وشراء للبنوك أو محلات الصرافة.',
+                'Reference rates are not bank or exchange-office buy/sell rates.',
+                'השערים הם שערי ייחוס ולא שערי קנייה/מכירה של בנקים או חלפנים.',
+              ),
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+// ============================================================
+// TAXI PAGE
+// ============================================================
+
+class TaxiPage extends StatelessWidget {
+  const TaxiPage({super.key});
+
+  Future<void> openGett() async {
+    final uri = Uri.parse('https://www.gett.com/il/');
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          tr(
+            'تاكسي',
+            'Taxi',
+            'מונית',
+          ),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.local_taxi,
+                    size: 70,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Text(
+                    tr(
+                      'احجز تاكسي',
+                      'Book a Taxi',
+                      'הזמן מונית',
+                    ),
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Text(
+                    tr(
+                      'اطلب تاكسي بسهولة من خلال Gett.',
+                      'Request a taxi easily through Gett.',
+                      'הזמן מונית בקלות דרך Gett.',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: openGett,
+                      icon: const Icon(
+                        Icons.local_taxi,
+                      ),
+                      label: Text(
+                        tr(
+                          'فتح Gett',
+                          'Open Gett',
+                          'פתח Gett',
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Card(
+            child: ListTile(
+              leading: const Icon(
+                Icons.location_on,
+              ),
+              title: Text(
+                tr(
+                  'استخدم موقعك',
+                  'Use your location',
+                  'השתמש במיקום שלך',
+                ),
+              ),
+              subtitle: Text(
+                tr(
+                  'يمكنك تحديد موقعك داخل Gett عند طلب الرحلة.',
+                  'You can set your pickup location inside Gett.',
+                  'ניתן לבחור את מיקום האיסוף בתוך Gett.',
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+} 
