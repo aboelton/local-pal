@@ -592,7 +592,13 @@ class HomeContent extends StatelessWidget {
                       child: Card(
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
-                          onTap: () {},
+                          onTap: () {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => const AssistantPage(),
+    ),
+  );
+},
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Column(
@@ -3337,6 +3343,191 @@ class TaxiPage extends StatelessWidget {
                   'You can set your pickup location inside Gett.',
                   'ניתן לבחור את מיקום האיסוף בתוך Gett.',
                 ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+} 
+// ============================================================
+// ASSISTANT PAGE
+// ============================================================
+class AssistantPage extends StatefulWidget {
+  const AssistantPage({super.key});
+
+  @override
+  State<AssistantPage> createState() => _AssistantPageState();
+}
+
+class _AssistantPageState extends State<AssistantPage> {
+  final TextEditingController _controller = TextEditingController();
+  final List<Map<String, String>> _messages = [];
+
+  bool _loading = false;
+
+  Future<void> sendMessage() async {
+    final message = _controller.text.trim();
+
+    if (message.isEmpty || _loading) return;
+
+    setState(() {
+      _messages.add({
+        'role': 'user',
+        'text': message,
+      });
+      _loading = true;
+    });
+
+    _controller.clear();
+
+    try {
+      final response = await http.post(
+        Uri.parse('/.netlify/functions/ai-chat'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'message': message,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _messages.add({
+            'role': 'assistant',
+            'text': data['reply'] ?? 'No response.',
+          });
+        });
+      } else {
+        setState(() {
+          _messages.add({
+            'role': 'assistant',
+            'text': data['error'] ?? 'حدث خطأ أثناء الاتصال بالمساعد.',
+          });
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _messages.add({
+          'role': 'assistant',
+          'text': 'حدث خطأ أثناء الاتصال بالمساعد.',
+        });
+      });
+    } finally {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          tr(
+            'المساعد',
+            'Assistant',
+            'עוזר',
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: _messages.isEmpty
+                ? Center(
+                    child: Text(
+                      tr(
+                        'اكتب سؤالك للمساعد 🤖',
+                        'Ask the assistant a question 🤖',
+                        'שאל את העוזר שאלה 🤖',
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final message = _messages[index];
+                      final isUser = message['role'] == 'user';
+
+                      return Align(
+                        alignment: isUser
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(14),
+                          constraints: const BoxConstraints(
+                            maxWidth: 320,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isUser
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            message['text'] ?? '',
+                            style: TextStyle(
+                              color: isUser
+                                  ? Theme.of(context)
+                                      .colorScheme
+                                      .onPrimary
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: CircularProgressIndicator(),
+            ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => sendMessage(),
+                      decoration: InputDecoration(
+                        hintText: tr(
+                          'اكتب سؤالك...',
+                          'Type your question...',
+                          'כתוב את השאלה שלך...',
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: _loading ? null : sendMessage,
+                    icon: const Icon(Icons.send),
+                  ),
+                ],
               ),
             ),
           ),
