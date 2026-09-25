@@ -443,12 +443,11 @@ class _HomePageState extends State<HomePage> {
 
 // ============================================================
 // HOME CONTENT
+
 // ============================================================
-
 class HomeContent extends StatelessWidget {
-  final City city;
   final ValueChanged<City> onCityChanged;
-
+  final City city;
   const HomeContent({
     super.key,
     required this.city,
@@ -460,22 +459,35 @@ class HomeContent extends StatelessWidget {
     return SafeArea(
       child: CustomScrollView(
         slivers: [
+          // ==================================================
+          // APP BAR
+          // ==================================================
           SliverAppBar(
             pinned: true,
             title: const Text(
               'Local Pal',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
+
+          // ==================================================
+          // MAIN CONTENT
+          // ==================================================
           SliverPadding(
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                // CITY SELECTOR
                 CitySelector(
                   city: city,
                   onChanged: onCityChanged,
                 ),
+
                 const SizedBox(height: 18),
+
+                // SEARCH TITLE
                 Text(
                   tr(
                     'ماذا تبحث اليوم؟',
@@ -485,13 +497,19 @@ class HomeContent extends StatelessWidget {
                   style: Theme.of(context)
                       .textTheme
                       .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                      ?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
-                const SizedBox(height: 12),
-                SearchButton(city: city),
+
                 const SizedBox(height: 12),
 
-                // CURRENT LOCATION BUTTON
+                // SEARCH BUTTON
+                SearchButton(city: city),
+
+                const SizedBox(height: 12),
+
+                // CURRENT LOCATION
                 CurrentLocationButton(
                   onLocationFound: (position) {
                     onCityChanged(
@@ -509,20 +527,156 @@ class HomeContent extends StatelessWidget {
                   },
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
+
+                // ==================================================
+                // SERVICES
+                // ==================================================
                 Text(
-                  tr('التصنيفات', 'Categories', 'קטגוריות'),
+                  tr(
+                    'الخدمات',
+                    'Services',
+                    'שירותים',
+                  ),
                   style: Theme.of(context)
                       .textTheme
                       .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                      ?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
+
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: Card(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {},
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.currency_exchange,
+                                  size: 32,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  tr(
+                                    'العملات',
+                                    'Currency',
+                                    'מטבע',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 10),
+
+                    Expanded(
+                      child: Card(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {},
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.smart_toy,
+                                  size: 32,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  tr(
+                                    'المساعد',
+                                    'Assistant',
+                                    'עוזר',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 10),
+
+                    Expanded(
+                      child: Card(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {},
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.local_taxi,
+                                  size: 32,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  tr(
+                                    'تاكسي',
+                                    'Taxi',
+                                    'מונית',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 28),
+
+                // ==================================================
+                // CATEGORIES TITLE
+                // ==================================================
+                Text(
+                  tr(
+                    'التصنيفات',
+                    'Categories',
+                    'קטגוריות',
+                  ),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+
                 const SizedBox(height: 12),
               ]),
             ),
           ),
+
+          // ==================================================
+          // CATEGORIES GRID
+          // ==================================================
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            padding: const EdgeInsets.fromLTRB(
+              16,
+              0,
+              16,
+              24,
+            ),
             sliver: SliverGrid(
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
