@@ -36,6 +36,7 @@ class Category {
   final String en;
   final String he;
   final IconData icon;
+  final String? image;
 
   const Category({
     required this.id,
@@ -43,6 +44,7 @@ class Category {
     required this.en,
     required this.he,
     required this.icon,
+    this.image,
   });
 
   String get name => tr(ar, en, he);
@@ -51,6 +53,7 @@ class Category {
 const categories = <Category>[
   Category(
     id: 'restaurant',
+    image: 'assests/categories/restaurant.jpg',
     ar: 'مطاعم',
     en: 'Restaurants',
     he: 'מסעדות',
@@ -893,11 +896,22 @@ class CategoryCard extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                category.icon,
-                size: 30,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+              if (category.image != null)
+  ClipRRect(
+    borderRadius: BorderRadius.circular(12),
+    child: Image.asset(
+      category.image!,
+      width: double.infinity,
+      height: 70,
+      fit: BoxFit.cover,
+    ),
+  )
+else
+  Icon(
+    category.icon,
+    size: 38,
+    color: Theme.of(context).colorScheme.primary,
+  ),
               const SizedBox(height: 8),
               Text(
                 category.name,
@@ -905,7 +919,7 @@ class CategoryCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 12,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -3535,4 +3549,4 @@ class _AssistantPageState extends State<AssistantPage> {
       ),
     );
   }
-} 
+}  
