@@ -896,22 +896,32 @@ class CategoryCard extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (category.image != null)
+            if (category.image != null)
   ClipRRect(
     borderRadius: BorderRadius.circular(12),
     child: Image.asset(
-      category.image!,
-      width: double.infinity,
+      'assets/categories/restaurant.jpg',
+      width: 120,
       height: 70,
       fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Text(
+          'IMAGE ERROR: $error',
+          style: const TextStyle(
+            color: Colors.red,
+            fontSize: 10,
+          ),
+        );
+      },
     ),
-  )
+  ) 
 else
   Icon(
     category.icon,
     size: 38,
     color: Theme.of(context).colorScheme.primary,
   ),
+  
               const SizedBox(height: 8),
               Text(
                 category.name,
