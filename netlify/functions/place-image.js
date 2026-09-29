@@ -1,0 +1,99 @@
+exports.handler = async function (event) {
+  try {
+    const { lat, lon } = event.queryStringParameters || {};
+
+    if (!lat || !lon) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing lat or lon" }),
+      };
+    }
+
+    const token = process.env.MAPILLARY_TOKEN;
+
+    if (!token) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "MAPILLARY_TOKEN is missing" }),
+      };
+    }
+
+    // Search in a small area around the place
+    const delta = 0.001;
+
+    const minLon = Number(lon) - delta;
+    const minLat = Number(lat) - delta;
+    const maxLon = Number(lon) + delta;
+    const maxLat = Number(lat) + delta;
+
+    const url =
+      `https://graph.mapillary.com/images` +
+      `?access_token=${encodeURIComponent(token)}` +
+      `&fields=id,thumb_1024_url,computed_geometry` +
+      `&bbox=${minLon},${minLat},${maxLon},${maxLat}` +
+      `&limit=20`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({
+          error: "Mapillary request failed",
+          details: data,
+        }),
+      };
+    }
+
+    const images = data.data || [];
+
+    if (images.length === 0) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ imageUrl: "" }),
+      };
+    }
+
+    // Find the closest image to the place
+    let closest = null;
+    let closestDistance = Infinity;
+
+    for (const image of images) {
+      const coordinates =
+        image.computed_geometry?.coordinates;
+
+      if (!coordinates || coordinates.length < 2) continue;
+
+      const imageLon = Number(coordinates[0]);
+      const imageLat = Number(coordinates[1]);
+
+      const distance =
+        Math.pow(imageLat - Number(lat), 2) +
+        Math.pow(imageLon - Number(lon), 2);
+
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closest = image;
+      }
+    }
+
+    return {
+      statusCode: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({
+        imageUrl: closest?.thumb_1024_url || "",
+      }),
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: error.message,
+      }),
+    };
+  }
+}; 
