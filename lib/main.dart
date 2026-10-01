@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -488,6 +487,109 @@ class HomeContent extends StatelessWidget {
                   onChanged: onCityChanged,
                 ),
 
+const SizedBox(height: 14),
+
+ClipRRect(
+  borderRadius: BorderRadius.circular(20),
+  child: Stack(
+    children: [
+      FutureBuilder<String?>(
+  future: getCityImage(city.name),
+  builder: (context, snapshot) {
+    final imageUrl = snapshot.data;
+
+    if (snapshot.connectionState ==
+        ConnectionState.waiting) {
+      return Container(
+        width: double.infinity,
+        height: 180,
+        alignment: Alignment.center,
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest,
+        child: const CircularProgressIndicator(),
+      );
+    }
+
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return Container(
+        width: double.infinity,
+        height: 180,
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest,
+      );
+    }
+
+    return Image.network(
+      imageUrl,
+      width: double.infinity,
+      height: 180,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          width: double.infinity,
+          height: 180,
+          color: Theme.of(context)
+              .colorScheme
+              .surfaceContainerHighest,
+        );
+      },
+    );
+  },
+),
+
+      Container(
+        width: double.infinity,
+        height: 180,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.black.withValues(alpha: 0.05),
+              Colors.black.withValues(alpha: 0.65),
+            ],
+          ),
+        ),
+      ),
+
+      Positioned(
+        left: 18,
+        right: 18,
+        bottom: 18,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              tr(
+                'اكتشف مدينتك',
+                'Discover your city',
+                'גלה את העיר שלך',
+              ),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              city.displayName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  ),
+),
+
+const SizedBox(height: 18),
+
                 const SizedBox(height: 18),
 
                 // SEARCH TITLE
@@ -738,6 +840,45 @@ class HomeContent extends StatelessWidget {
   }
 }
 
+Future<String?> getCityImage(String cityName) async {
+  try {
+    final uri = Uri.https(
+      'en.wikipedia.org',
+      '/w/api.php',
+      {
+        'action': 'query',
+        'format': 'json',
+        'generator': 'search',
+        'gsrsearch': '$cityName city',
+        'gsrlimit': '1',
+        'prop': 'pageimages',
+        'piprop': 'thumbnail',
+        'pithumbsize': '1200',
+        'origin': '*',
+      },
+    );
+
+    final response = await http.get(uri);
+
+    if (response.statusCode != 200) {
+      return null;
+    }
+
+    final data = jsonDecode(response.body);
+    final pages = data['query']?['pages'];
+
+    if (pages == null || pages.isEmpty) {
+      return null;
+    }
+
+    final firstPage = pages.values.first;
+
+    return firstPage['thumbnail']?['source']?.toString();
+  } catch (_) {
+    return null;
+  }
+}
+
 // ============================================================
 // CITY SELECTOR
 // ============================================================
@@ -885,6 +1026,67 @@ class CategoryCard extends StatelessWidget {
     required this.onTap,
   });
 
+  Color get categoryColor {
+    switch (category.id) {
+      case 'restaurant':
+        return Colors.red;
+      case 'cafe':
+        return Colors.brown;
+      case 'fast_food':
+        return Colors.orange;
+      case 'bakery':
+        return Colors.deepOrange;
+      case 'supermarket':
+        return Colors.green;
+      case 'shop':
+        return Colors.pink;
+      case 'clothes':
+        return Colors.purple;
+      case 'electronics':
+        return Colors.blue;
+      case 'hotel':
+        return Colors.deepPurple;
+      case 'park':
+        return Colors.green;
+      case 'cinema':
+        return Colors.indigo;
+      case 'gym':
+        return Colors.orange;
+      case 'hospital':
+        return Colors.teal;
+      case 'clinic':
+        return Colors.cyan;
+      case 'pharmacy':
+        return Colors.green;
+      case 'dentist':
+        return Colors.lightBlue;
+      case 'doctor':
+        return Colors.teal;
+      case 'fuel':
+        return Colors.green;
+      case 'barber':
+        return Colors.brown;
+      case 'bank':
+        return Colors.blue;
+      case 'atm':
+        return Colors.blueGrey;
+      case 'mall':
+        return Colors.pink;
+      case 'mosque':
+        return Colors.green;
+      case 'church':
+        return Colors.deepPurple;
+      case 'school':
+        return Colors.orange;
+      case 'university':
+        return Colors.indigo;
+      case 'parking':
+        return Colors.blueGrey;
+      default:
+        return Colors.blue;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -896,33 +1098,20 @@ class CategoryCard extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-            if (category.image != null)
-  ClipRRect(
-    borderRadius: BorderRadius.circular(12),
-    child: Image.asset(
-      'assets/categories/restaurant.jpg',
-      width: 120,
-      height: 70,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
-        return Text(
-          'IMAGE ERROR: $error',
-          style: const TextStyle(
-            color: Colors.red,
-            fontSize: 10,
-          ),
-        );
-      },
-    ),
-  ) 
-else
-  Icon(
-    category.icon,
-    size: 38,
-    color: Theme.of(context).colorScheme.primary,
-  ),
-  
-              const SizedBox(height: 8),
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: categoryColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  category.icon,
+                  size: 30,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 10),
               Text(
                 category.name,
                 textAlign: TextAlign.center,
@@ -1244,158 +1433,245 @@ class _PlacesPageState extends State<PlacesPage> {
 // ============================================================
 
 class PlacesService {
-  static List<String> get servers {
-    if (kIsWeb) {
-      return <String>[
-        '${Uri.base.origin}/.netlify/functions/overpass',
-      ];
-    }
-
-    return <String>[
-      'https://local-pal.netlify.app/.netlify/functions/overpass',
-      'https://overpass-api.de/api/interpreter',
-    ];
-  }
 
   static Future<List<Place>> getPlaces({
     required City city,
     required Category category,
   }) async {
-    final filter = _categoryFilter(category.id);
+    
 
-    final query = '''
-[out:json][timeout:15];
-(
-  node(around:5000,${city.lat},${city.lon})$filter;
-  way(around:5000,${city.lat},${city.lon})$filter;
-  relation(around:5000,${city.lat},${city.lon})$filter;
-);
-out center tags;
-''';
+    final geoCategory =
+        _geoCategory(category.id);
 
-    Object? lastError;
+    final radius =
+        _radiusForCategory(category.id);
 
-    for (final server in servers) {
-      try {
-        final response = await http
-            .post(
-              Uri.parse(server),
-              headers: {
-                'User-Agent': 'LocalPal/1.0',
-                'Content-Type':
-                    'application/x-www-form-urlencoded',
-              },
-              body: {
-                'data': query,
-              },
-            )
-            .timeout(
-              const Duration(seconds: 30),
-            );
+    final uri = Uri.https(
+      'local-pal-api.tonytabri12.workers.dev',
+      '/places',
+      {
+        'categories': geoCategory,
 
-        if (response.statusCode != 200) {
-          lastError =
-              'HTTP ${response.statusCode} from $server';
+        'filter':
+            'circle:${city.lon},${city.lat},$radius',
+
+        // بخلي الأقرب يطلع أول
+        'bias':
+            'proximity:${city.lon},${city.lat}',
+
+        'limit': '100',
+
+        'lang': _geoLanguage(),
+      },
+    );
+
+    try {
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(
+            const Duration(seconds: 15),
+          );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Geoapify HTTP ${response.statusCode}: '
+          '${response.body}',
+        );
+      }
+
+      final data =
+          jsonDecode(response.body);
+
+      if (data is! Map ||
+          data['features'] is! List) {
+        throw Exception(
+          'Invalid Geoapify response',
+        );
+      }
+
+      final result = <Place>[];
+
+      final features =
+          data['features'] as List;
+
+      for (final feature in features) {
+        if (feature is! Map) {
           continue;
         }
 
-        final data = jsonDecode(response.body);
+        final rawProperties =
+            feature['properties'];
 
-        if (data is! Map ||
-            data['elements'] is! List) {
-          lastError =
-              'Invalid response from $server';
+        if (rawProperties is! Map) {
           continue;
         }
 
-        final result = <Place>[];
+        final properties =
+            Map<String, dynamic>.from(
+          rawProperties,
+        );
 
-        for (final element in data['elements']) {
-          if (element is! Map) continue;
+        final geometryRaw =
+            feature['geometry'];
 
-          final rawTags = element['tags'];
+        if (geometryRaw is! Map) {
+          continue;
+        }
 
-          final tags = rawTags is Map
-              ? Map<String, dynamic>.from(rawTags)
-              : <String, dynamic>{};
+        final geometry =
+            Map<String, dynamic>.from(
+          geometryRaw,
+        );
 
-          final name =
-              '${tags['name'] ?? ''}'.trim();
+        final coordinates =
+            geometry['coordinates'];
 
-          if (name.isEmpty) continue;
+        if (coordinates is! List ||
+            coordinates.length < 2) {
+          continue;
+        }
 
-          double? lat;
-          double? lon;
+        final lon = double.tryParse(
+          '${coordinates[0]}',
+        );
 
-          if (element['lat'] != null &&
-              element['lon'] != null) {
-            lat = double.tryParse(
-              '${element['lat']}',
-            );
+        final lat = double.tryParse(
+          '${coordinates[1]}',
+        );
 
-            lon = double.tryParse(
-              '${element['lon']}',
-            );
-          } else if (element['center'] is Map) {
-            final center =
-                Map<String, dynamic>.from(
-              element['center'],
-            );
+        if (lat == null || lon == null) {
+          continue;
+        }
 
-            lat = double.tryParse(
-              '${center['lat']}',
-            );
+        final name = _placeName(
+          properties,
+          fallback: category.name,
+        );
 
-            lon = double.tryParse(
-              '${center['lon']}',
-            );
-          }
+        final datasource =
+            properties['datasource'];
 
-          if (lat == null || lon == null) {
-            continue;
-          }
+        Map<String, dynamic> raw =
+            <String, dynamic>{};
 
-          result.add(
-            Place(
-              id:
-                  '${element['type']}_${element['id']}',
-              name: name,
-              category: category.id,
-              lat: lat,
-              lon: lon,
-              address:
-                  _addressFromTags(tags),
-              phone:
-                  '${tags['phone'] ?? tags['contact:phone'] ?? ''}',
-              website:
-                  '${tags['website'] ?? tags['contact:website'] ?? ''}',
-              hours:
-                  '${tags['opening_hours'] ?? ''}',
-              imageUrl:
-                  '${tags['image'] ?? ''}',
-              rating:
-                  double.tryParse(
-                        '${tags['rating'] ?? 0}',
-                      ) ??
-                      0,
-              ratingCount:
-                  int.tryParse(
-                        '${tags['rating:count'] ?? 0}',
-                      ) ??
-                      0,
-            ),
+        if (datasource is Map &&
+            datasource['raw'] is Map) {
+          raw =
+              Map<String, dynamic>.from(
+            datasource['raw'],
           );
         }
 
-        result.sort((a, b) {
-          final da = calculateDistance(
+        final contactRaw =
+            properties['contact'];
+
+        Map<String, dynamic> contact =
+            <String, dynamic>{};
+
+        if (contactRaw is Map) {
+          contact =
+              Map<String, dynamic>.from(
+            contactRaw,
+          );
+        }
+
+        final phone = _firstNonEmpty(
+          [
+            properties['phone'],
+            contact['phone'],
+            raw['phone'],
+            raw['contact:phone'],
+          ],
+        );
+
+        final website = _firstNonEmpty(
+          [
+            properties['website'],
+            contact['website'],
+            raw['website'],
+            raw['contact:website'],
+          ],
+        );
+
+        final hours = _firstNonEmpty(
+          [
+            properties['opening_hours'],
+            raw['opening_hours'],
+          ],
+        );
+
+        final address = _firstNonEmpty(
+          [
+            properties['formatted'],
+            properties['address_line2'],
+            properties['address_line1'],
+          ],
+        );
+
+        final id = _firstNonEmpty(
+          [
+            properties['place_id'],
+            raw['osm_id'],
+          ],
+        );
+
+        result.add(
+          Place(
+            id: id.isNotEmpty
+                ? 'geo_$id'
+                : 'geo_${category.id}_${lat}_$lon',
+
+            name: name,
+
+            category: category.id,
+
+            lat: lat,
+
+            lon: lon,
+
+            address: address,
+
+            phone: phone,
+
+            website: website,
+
+            hours: hours,
+
+            // نخليه فاضي عشان PlaceImage
+            // يجيب Mapillary زي قبل
+            imageUrl: '',
+
+            rating: double.tryParse(
+                  '${properties['rating'] ?? 0}',
+                ) ??
+                0,
+
+            ratingCount: int.tryParse(
+                  '${properties['rating_count'] ?? 0}',
+                ) ??
+                0,
+          ),
+        );
+      }
+
+      // زيادة تأكيد إن الأقرب يطلع أول
+      result.sort(
+        (a, b) {
+          final da =
+              calculateDistance(
             city.lat,
             city.lon,
             a.lat,
             a.lon,
           );
 
-          final db = calculateDistance(
+          final db =
+              calculateDistance(
             city.lat,
             city.lon,
             b.lat,
@@ -1403,139 +1679,221 @@ out center tags;
           );
 
           return da.compareTo(db);
-        });
+        },
+      );
 
-        return result.take(100).toList();
-      } catch (e) {
-        lastError = e;
+      return result;
+    } catch (e) {
+      throw Exception(
+        '${tr(
+          'تعذر تحميل الأماكن',
+          'Could not load places',
+          'לא ניתן לטעון מקומות',
+        )}: $e',
+      );
+    }
+  }
+
+  // =========================================================
+  // GEOAPIFY CATEGORY
+  // =========================================================
+  static String _geoCategory(
+    String id,
+  ) {
+    switch (id) {
+      case 'restaurant':
+        return 'catering.restaurant';
+
+      case 'cafe':
+        return 'catering.cafe';
+
+      case 'fast_food':
+        return 'catering.fast_food';
+
+      case 'bakery':
+        return 'commercial.food_and_drink.bakery';
+
+      case 'supermarket':
+        return 'commercial.supermarket';
+
+      case 'shop':
+        return 'commercial';
+
+      case 'clothes':
+        return 'commercial.clothing';
+
+      case 'electronics':
+        // مكتوبة هيك رسميًا عند Geoapify
+        return 'commercial.elektronics';
+
+      case 'hotel':
+        return 'accommodation.hotel';
+
+      case 'park':
+        return 'leisure.park';
+
+      case 'cinema':
+        return 'entertainment.cinema';
+
+      case 'gym':
+        return 'sport.fitness.gym';
+
+      case 'hospital':
+        return 'healthcare.hospital';
+
+      case 'clinic':
+        return 'healthcare.clinic_or_praxis';
+
+      case 'pharmacy':
+        return 'healthcare.pharmacy';
+
+      case 'dentist':
+        return 'healthcare.dentist';
+
+      case 'doctor':
+        return 'healthcare.clinic_or_praxis.general';
+
+      case 'fuel':
+        return 'service.vehicle.fuel';
+
+      case 'barber':
+        return 'service.beauty.hairdresser';
+
+      case 'bank':
+        return 'service.financial.bank';
+
+      case 'atm':
+        return 'service.financial.atm';
+
+      case 'mall':
+        return 'commercial.shopping_mall';
+
+      case 'mosque':
+        return 'religion.place_of_worship.islam';
+
+      case 'church':
+        return 'religion.place_of_worship.christianity';
+
+      case 'school':
+        return 'education.school';
+
+      case 'university':
+        return 'education.university';
+
+      case 'parking':
+        return 'parking';
+
+      default:
+        return 'commercial';
+    }
+  }
+
+  // =========================================================
+  // RADIUS
+  // =========================================================
+  static int _radiusForCategory(
+    String id,
+  ) {
+    if ([
+      'restaurant',
+      'cafe',
+      'fast_food',
+      'bakery',
+      'supermarket',
+      'shop',
+      'clothes',
+      'electronics',
+      'pharmacy',
+      'atm',
+      'barber',
+    ].contains(id)) {
+      return 1500;
+    }
+
+    if ([
+      'fuel',
+      'hospital',
+      'hotel',
+      'mall',
+      'university',
+    ].contains(id)) {
+      return 5000;
+    }
+
+    return 3000;
+  }
+
+  // =========================================================
+  // LANGUAGE
+  // =========================================================
+  static String _geoLanguage() {
+    if (appLanguage == 'he') {
+      return 'he';
+    }
+
+    if (appLanguage == 'en') {
+      return 'en';
+    }
+
+    return 'ar';
+  }
+
+  // =========================================================
+  // PLACE NAME
+  // =========================================================
+  static String _placeName(
+    Map<String, dynamic> properties, {
+    required String fallback,
+  }) {
+    final international =
+        properties['name_international'];
+
+    if (international is Map) {
+      final translated =
+          '${international[appLanguage] ?? ''}'
+              .trim();
+
+      if (translated.isNotEmpty) {
+        return translated;
       }
     }
 
-    throw Exception(
-      lastError?.toString() ??
-          tr(
-            'تعذر تحميل الأماكن',
-            'Could not load places',
-            'לא ניתן לטעון מקומות',
-          ),
-    );
+    final name =
+        '${properties['name'] ?? ''}'
+            .trim();
+
+    if (name.isNotEmpty) {
+      return name;
+    }
+
+    final addressName =
+        '${properties['address_line1'] ?? ''}'
+            .trim();
+
+    if (addressName.isNotEmpty) {
+      return addressName;
+    }
+
+    return fallback;
   }
 
-  static String _addressFromTags(
-    Map<String, dynamic> tags,
+  // =========================================================
+  // FIRST NON EMPTY VALUE
+  // =========================================================
+  static String _firstNonEmpty(
+    List<dynamic> values,
   ) {
-    final parts = <String>[];
+    for (final value in values) {
+      final text =
+          '${value ?? ''}'.trim();
 
-    final street =
-        '${tags['addr:street'] ?? ''}'.trim();
-
-    final house =
-        '${tags['addr:housenumber'] ?? ''}'.trim();
-
-    final city =
-        '${tags['addr:city'] ?? ''}'.trim();
-
-    if (street.isNotEmpty) {
-      parts.add(
-        house.isNotEmpty
-            ? '$street $house'
-            : street,
-      );
+      if (text.isNotEmpty &&
+          text != 'null') {
+        return text;
+      }
     }
 
-    if (city.isNotEmpty) {
-      parts.add(city);
-    }
-
-    return parts.join(', ');
-  }
-
-  static String _categoryFilter(String id) {
-    switch (id) {
-      case 'restaurant':
-        return '[amenity=restaurant]';
-
-      case 'cafe':
-        return '[amenity=cafe]';
-
-      case 'fast_food':
-        return '[amenity=fast_food]';
-
-      case 'bakery':
-        return '[shop=bakery]';
-
-      case 'supermarket':
-        return '[shop=supermarket]';
-
-      case 'shop':
-        return '[shop]';
-
-      case 'clothes':
-        return '[shop=clothes]';
-
-      case 'electronics':
-        return '[shop=electronics]';
-
-      case 'hotel':
-        return '[tourism=hotel]';
-
-      case 'park':
-        return '[leisure=park]';
-
-      case 'cinema':
-        return '[amenity=cinema]';
-
-      case 'gym':
-        return '[leisure=fitness_centre]';
-
-      case 'hospital':
-        return '[amenity=hospital]';
-
-      case 'clinic':
-        return '[amenity=clinic]';
-
-      case 'pharmacy':
-        return '[amenity=pharmacy]';
-
-      case 'dentist':
-        return '[amenity=dentist]';
-
-      case 'doctor':
-        return '[amenity=doctors]';
-
-      case 'fuel':
-        return '[amenity=fuel]';
-
-      case 'barber':
-        return '[shop=hairdresser]';
-
-      case 'bank':
-        return '[amenity=bank]';
-
-      case 'atm':
-        return '[amenity=atm]';
-
-      case 'mall':
-        return '[shop=mall]';
-
-      case 'mosque':
-        return '[amenity=place_of_worship][religion=muslim]';
-
-      case 'church':
-        return '[amenity=place_of_worship][religion=christian]';
-
-      case 'school':
-        return '[amenity=school]';
-
-      case 'university':
-        return '[amenity=university]';
-
-      case 'parking':
-        return '[amenity=parking]';
-
-      default:
-        return '[name]';
-    }
+    return '';
   }
 }
 
@@ -1680,7 +2038,7 @@ class _PlaceCardState extends State<PlaceCard> {
 // IMAGE
 // ============================================================
 
-class PlaceImage extends StatelessWidget {
+class PlaceImage extends StatefulWidget {
   final Place place;
   final double size;
 
@@ -1691,14 +2049,80 @@ class PlaceImage extends StatelessWidget {
   });
 
   @override
+  State<PlaceImage> createState() => _PlaceImageState();
+}
+
+class _PlaceImageState extends State<PlaceImage> {
+  String imageUrl = '';
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (widget.place.imageUrl.isNotEmpty) {
+      imageUrl = widget.place.imageUrl;
+      loading = false;
+    } else {
+      loadImage();
+    }
+  }
+
+  Future<void> loadImage() async {
+    try {
+      final uri = Uri.parse(
+        'https://local-pal-api.tonytabri12.workers.dev/place-image'
+        '?lat=${widget.place.lat}'
+        '&lon=${widget.place.lon}',
+      );
+
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        final url = data['imageUrl']?.toString() ?? '';
+
+        if (mounted) {
+          setState(() {
+            imageUrl = url;
+            loading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            loading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (place.imageUrl.isNotEmpty) {
+    if (loading) {
+      return Container(
+        width: widget.size,
+        height: widget.size,
+        alignment: Alignment.center,
+        child: const CircularProgressIndicator(),
+      );
+    }
+
+    if (imageUrl.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(14),
         child: Image.network(
-          place.imageUrl,
-          width: size,
-          height: size,
+          imageUrl,
+          width: widget.size,
+          height: widget.size,
           fit: BoxFit.cover,
           errorBuilder: (
             context,
@@ -1716,16 +2140,17 @@ class PlaceImage extends StatelessWidget {
 
   Widget placeholder(BuildContext context) {
     return Container(
-      width: size,
-      height: size,
+      width: widget.size,
+      height: widget.size,
       decoration: BoxDecoration(
-        color:
-            Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Icon(
-        getCategoryIcon(place.category),
-        size: size * 0.4,
+        getCategoryIcon(widget.place.category),
+        size: widget.size * 0.4,
         color: Theme.of(context).colorScheme.primary,
       ),
     );
