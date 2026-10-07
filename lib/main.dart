@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 void main() {
   runApp(const LocalPalApp());
@@ -108,12 +110,12 @@ const categories = <Category>[
     icon: Icons.devices,
   ),
   Category(
-    id: 'hotel',
-    ar: 'فنادق',
-    en: 'Hotels',
-    he: 'מלונות',
-    icon: Icons.hotel,
-  ),
+  id: 'hotel',
+  ar: 'فنادق',
+  en: 'Hotels',
+  he: 'מלונות',
+  icon: Icons.hotel,
+),
   Category(
     id: 'park',
     ar: 'حدائق',
@@ -170,6 +172,13 @@ const categories = <Category>[
     he: 'רופאים',
     icon: Icons.person_search,
   ),
+  Category(
+  id: 'veterinary',
+  ar: 'دكتور بيطري',
+  en: 'Veterinarians',
+  he: 'וטרינרים',
+  icon: Icons.pets,
+),
   Category(
     id: 'fuel',
     ar: 'محطات وقود',
@@ -360,6 +369,7 @@ class _LocalPalAppState extends State<LocalPalApp> {
         useMaterial3: true,
         colorSchemeSeed: Colors.green,
         brightness: Brightness.light,
+        scaffoldBackgroundColor: const Color(0xFF263A27),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
@@ -447,7 +457,7 @@ class _HomePageState extends State<HomePage> {
 // HOME CONTENT
 // ============================================================
 
-class HomeContent extends StatelessWidget {
+class HomeContent extends StatefulWidget {
   final ValueChanged<City> onCityChanged;
   final City city;
   const HomeContent({
@@ -455,6 +465,110 @@ class HomeContent extends StatelessWidget {
     required this.city,
     required this.onCityChanged,
   });
+
+  @override
+  State<HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<HomeContent> {
+  List<Place> _nearbyPlaces = [];
+bool _loadingNearby = false;
+bool _nearbyLoaded = false;
+City? _nearbyCity;
+
+Future<void> _loadNearbyPlaces() async {
+  if (_loadingNearby) return;
+
+  setState(() {
+    _loadingNearby = true;
+  });
+
+  try {
+    final position =
+        await CurrentLocationService.getCurrentLocation();
+
+    if (position == null) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadingNearby = false;
+        _nearbyLoaded = true;
+      });
+      return;
+    }
+
+    final nearbyCity = City(
+      name: 'Current Location',
+      displayName: tr(
+        'موقعي الحالي',
+        'My current location',
+        'המיקום הנוכחי שלי',
+      ),
+      lat: position.latitude,
+      lon: position.longitude,
+    );
+    _nearbyCity = nearbyCity;
+    final nearbyCategoryIds = <String>[
+      'restaurant',
+      'cafe',
+      'supermarket',
+      'pharmacy',
+    ];
+
+    final selectedCategories = categories
+        .where(
+          (category) =>
+              nearbyCategoryIds.contains(category.id),
+        )
+        .toList();
+
+    final results = await Future.wait(
+      selectedCategories.map(
+        (category) => PlacesService.getPlaces(
+          city: nearbyCity,
+          category: category,
+        ),
+      ),
+    );
+
+    final places =
+        results.expand((list) => list).toList();
+
+    places.sort((a, b) {
+      final distanceA = calculateDistance(
+        nearbyCity.lat,
+        nearbyCity.lon,
+        a.lat,
+        a.lon,
+      );
+
+      final distanceB = calculateDistance(
+        nearbyCity.lat,
+        nearbyCity.lon,
+        b.lat,
+        b.lon,
+      );
+
+      return distanceA.compareTo(distanceB);
+    });
+
+    if (!mounted) return;
+
+    setState(() {
+      _nearbyCity = nearbyCity;
+      _nearbyPlaces = places.take(10).toList();
+      _loadingNearby = false;
+      _nearbyLoaded = true;
+    });
+  } catch (_) {
+    if (!mounted) return;
+
+    setState(() {
+      _loadingNearby = false;
+      _nearbyLoaded = true;
+    });
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -465,14 +579,66 @@ class HomeContent extends StatelessWidget {
           // APP BAR
           // ==================================================
           SliverAppBar(
-            pinned: true,
-            title: const Text(
-              'Local Pal',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
+  pinned: true,
+  expandedHeight: 120,
+  backgroundColor: const Color(0xFF1F302D),
+  surfaceTintColor: Colors.transparent,
+  flexibleSpace: FlexibleSpaceBar(
+    background: Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF172522),
+            Color(0xFF2B403A),
+          ],
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              RichText(
+                text: const TextSpan(
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: 'Local ',
+                      style: TextStyle(
+                        color: Colors.white,
+                      ),
+                    ),
+                    TextSpan(
+                      text: 'Pal',
+                      style: TextStyle(
+                        color: Color(0xFF7ED68B),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              const Spacer(),
+              IconButton(
+                onPressed: null,
+                icon: Icon(
+                  Icons.notifications_none_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+            ],
           ),
+        ),
+      ),
+    ),
+  ),
+),
 
           // ==================================================
           // MAIN CONTENT
@@ -483,8 +649,8 @@ class HomeContent extends StatelessWidget {
               delegate: SliverChildListDelegate([
                 // CITY SELECTOR
                 CitySelector(
-                  city: city,
-                  onChanged: onCityChanged,
+                  city: widget.city,
+                  onChanged: widget.onCityChanged,
                 ),
 
 const SizedBox(height: 14),
@@ -494,7 +660,7 @@ ClipRRect(
   child: Stack(
     children: [
       FutureBuilder<String?>(
-  future: getCityImage(city.name),
+  future: getCityImage(widget.city.name),
   builder: (context, snapshot) {
     final imageUrl = snapshot.data;
 
@@ -575,7 +741,7 @@ ClipRRect(
             ),
             const SizedBox(height: 4),
             Text(
-              city.displayName,
+              widget.city.displayName,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -593,31 +759,31 @@ const SizedBox(height: 18),
                 const SizedBox(height: 18),
 
                 // SEARCH TITLE
-                Text(
-                  tr(
-                    'ماذا تبحث اليوم؟',
-                    'What are you looking for?',
-                    'מה אתה מחפש היום?',
-                  ),
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
+Text(
+  tr(
+    'ماذا تبحث اليوم؟',
+    'What are you looking for?',
+    'מה אתה מחפש היום?',
+  ),
+  style: Theme.of(context)
+      .textTheme
+      .headlineSmall
+      ?.copyWith(
+        fontWeight: FontWeight.bold,
+      ),
+),
 
-                const SizedBox(height: 12),
+const SizedBox(height: 12),
 
                 // SEARCH BUTTON
-                SearchButton(city: city),
+                SearchButton(city: widget.city),
 
                 const SizedBox(height: 12),
 
                 // CURRENT LOCATION
                 CurrentLocationButton(
                   onLocationFound: (position) {
-                    onCityChanged(
+                    widget.onCityChanged(
                       City(
                         name: 'Current Location',
                         displayName: tr(
@@ -633,6 +799,80 @@ const SizedBox(height: 18),
                 ),
 
                 const SizedBox(height: 28),
+
+// ==================================================
+// NEARBY PLACES
+// ==================================================
+Row(
+  children: [
+    Expanded(
+      child: Text(
+        tr(
+          'قريب منك',
+          'Nearby',
+          'קרוב אליך',
+        ),
+        style: Theme.of(context)
+            .textTheme
+            .titleLarge
+            ?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+      ),
+    ),
+    TextButton.icon(
+      onPressed:
+          _loadingNearby ? null : _loadNearbyPlaces,
+      icon: const Icon(Icons.near_me_outlined),
+      label: Text(
+        _nearbyLoaded
+            ? tr(
+                'تحديث',
+                'Refresh',
+                'רענון',
+              )
+            : tr(
+                'اعرض',
+                'Show',
+                'הצג',
+              ),
+      ),
+    ),
+  ],
+),
+
+const SizedBox(height: 12),
+
+if (_loadingNearby)
+  const Center(
+    child: Padding(
+      padding: EdgeInsets.all(20),
+      child: CircularProgressIndicator(),
+    ),
+  )
+else if (_nearbyLoaded && _nearbyPlaces.isEmpty)
+  Padding(
+    padding: const EdgeInsets.symmetric(
+      vertical: 12,
+    ),
+    child: Text(
+      tr(
+        'لم نجد أماكن قريبة حالياً',
+        'No nearby places found',
+        'לא נמצאו מקומות קרובים',
+      ),
+    ),
+  )
+else if (_nearbyPlaces.isNotEmpty &&
+    _nearbyCity != null)
+  ..._nearbyPlaces.map(
+    (place) => PlaceCard(
+      place: place,
+      city: _nearbyCity!,
+    ),
+  ),
+
+const SizedBox(height: 28),
 
                 // ==================================================
                 // SERVICES
@@ -653,123 +893,289 @@ const SizedBox(height: 18),
 
                 const SizedBox(height: 12),
 
-                Row(
+               Row(
+  children: [
+    // ================= CURRENCY =================
+    Expanded(
+      child: SizedBox(
+        height: 155,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CurrencyPage(),
+                ),
+              );
+            },
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                image: const DecorationImage(
+                  image: AssetImage(
+                    'assets/categories/currency.png',
+                  ),
+                  fit: BoxFit.cover,
+                ),
+                border: Border.all(
+                  color: Colors.white24,
+                ),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.08),
+                      Colors.black.withValues(alpha: 0.72),
+                    ],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Card(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                          Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                          builder: (_) => const CurrencyPage(),
-                          ),
-                          );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              children: [
-                                const Icon(
-                                  Icons.currency_exchange,
-                                  size: 32,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  tr(
-                                    'العملات',
-                                    'Currency',
-                                    'מטבע',
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.20),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.currency_exchange,
+                        color: Colors.white,
+                        size: 24,
                       ),
                     ),
-
-                    const SizedBox(width: 10),
-
-                    Expanded(
-                      child: Card(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (context) => const AssistantPage(),
-    ),
-  );
-},
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              children: [
-                                const Icon(
-                                  Icons.smart_toy,
-                                  size: 32,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  tr(
-                                    'المساعد',
-                                    'Assistant',
-                                    'עוזר',
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                    const Spacer(),
+                    Text(
+                      tr(
+                        'العملات',
+                        'Currency',
+                        'מטבע',
+                      ),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-
-                    const SizedBox(width: 10),
-
-                    Expanded(
-                      child: Card(
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => const TaxiPage(),
-    ),
-  );
-},
-  
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              children: [
-                                const Icon(
-                                  Icons.local_taxi,
-                                  size: 32,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  tr(
-                                    'تاكسي',
-                                    'Taxi',
-                                    'מונית',
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                    const SizedBox(height: 3),
+                    Text(
+                      tr(
+                        'تحويل العملات',
+                        'Convert currency',
+                        'המרת מטבע',
+                      ),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
                       ),
                     ),
                   ],
                 ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
 
-                const SizedBox(height: 28),
+    const SizedBox(width: 10),
+
+    // ================= ASSISTANT =================
+    Expanded(
+      child: SizedBox(
+        height: 155,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AssistantPage(),
+                ),
+              );
+            },
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                image: const DecorationImage(
+                  image: AssetImage(
+                    'assets/categories/assistant.png',
+                  ),
+                  fit: BoxFit.cover,
+                ),
+                border: Border.all(
+                  color: Colors.white24,
+                ),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.05),
+                      Colors.black.withValues(alpha: 0.68),
+                    ],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.20),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.smart_toy_outlined,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      tr(
+                        'المساعد',
+                        'Assistant',
+                        'עוזר',
+                      ),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      tr(
+                        'مساعدك الذكي',
+                        'Your smart assistant',
+                        'העוזר החכם שלך',
+                      ),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+
+    const SizedBox(width: 10),
+
+    // ================= TAXI =================
+    Expanded(
+      child: SizedBox(
+        height: 155,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const TaxiPage(),
+                ),
+              );
+            },
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                image: const DecorationImage(
+                  image: AssetImage(
+                    'assets/categories/taxi.png',
+                  ),
+                  fit: BoxFit.cover,
+                ),
+                border: Border.all(
+                  color: Colors.white24,
+                ),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.05),
+                      Colors.black.withValues(alpha: 0.70),
+                    ],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.20),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.local_taxi_outlined,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      tr(
+                        'تاكسي',
+                        'Taxi',
+                        'מונית',
+                      ),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      tr(
+                        'اطلب تاكسي الآن',
+                        'Book a taxi now',
+                        'הזמן מונית עכשיו',
+                      ),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ],
+),
 
                 // ==================================================
                 // CATEGORIES TITLE
@@ -815,7 +1221,7 @@ const SizedBox(height: 18),
                         context,
                         MaterialPageRoute(
                           builder: (_) => PlacesPage(
-                            city: city,
+                            city: widget.city,
                             category: category,
                           ),
                         ),
@@ -834,7 +1240,415 @@ const SizedBox(height: 18),
               ),
             ),
           ),
+      
+          // ==================================================
+          // STAYS
+          // ==================================================
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tr(
+                      'وين بدك تسكن؟',
+                      'Where to stay?',
+                      'איפה תרצו להתארח?',
+                    ),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                          onTap: () {
+  final hotelCategory =
+      categories.firstWhere((c) => c.id == 'hotel');
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => PlacesPage(
+        city: widget.city,
+        category: hotelCategory,
+      ),
+    ),
+  );
+},
+
+                            child: Container(
+  height: 185,
+  decoration: const BoxDecoration(
+    image: DecorationImage(
+      image: AssetImage(
+        'assets/categories/hotels.png',
+      ),
+      fit: BoxFit.cover,
+    ),
+  ),
+  child: Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.transparent,
+          Colors.black.withValues(alpha: 0.75),
         ],
+      ),
+    ),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        const CircleAvatar(
+          radius: 25,
+          backgroundColor: Color(0xFF4285F4),
+          child: Icon(
+            Icons.hotel,
+            color: Colors.white,
+            size: 27,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          tr(
+            'فنادق',
+            'Hotels',
+            'מלונות',
+          ),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+),
+    ),
+  ),
+      const SizedBox(width: 12),
+
+Expanded(
+  child: Card(
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => LocalStaysPage(
+        city: widget.city,
+      ),
+    ),
+  );
+},
+      child: Container(
+  height: 185,
+  decoration: const BoxDecoration(
+    image: DecorationImage(
+      image: AssetImage(
+        'assets/categories/local_stay.png',
+      ),
+      fit: BoxFit.cover,
+    ),
+  ),
+  child: Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.transparent,
+          Colors.black.withValues(alpha: 0.75),
+        ],
+      ),
+    ),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        const CircleAvatar(
+          radius: 25,
+          backgroundColor: Color(0xFF21966B),
+          child: Icon(
+            Icons.home_work_outlined,
+            color: Colors.white,
+            size: 27,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          tr(
+            'سكن محلي',
+            'Local Stay',
+            'אירוח מקומי',
+          ),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+      ),
+    ),
+  ),
+                    ],                    
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class LocalStaysPage extends StatefulWidget {
+  final City city;
+
+  const LocalStaysPage({
+    super.key,
+    required this.city,
+  });
+
+  @override
+  State<LocalStaysPage> createState() => _LocalStaysPageState();
+}
+
+class _LocalStaysPageState extends State<LocalStaysPage> {
+  List<Place> stays = [];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStays();
+  }
+
+  Future<void> _loadStays() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+
+    try {
+      const localStayCategory = Category(
+        id: 'local_stay',
+        ar: 'سكن محلي',
+        en: 'Local Stay',
+        he: 'אירוח מקומי',
+        icon: Icons.home_work_outlined,
+      );
+
+      final result = await PlacesService.getPlaces(
+        city: widget.city,
+        category: localStayCategory,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        stays = result;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error = e.toString();
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          tr(
+            'سكن محلي',
+            'Local Stays',
+            'אירוח מקומי',
+          ),
+        ),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadStays,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              tr(
+                'اكتشف سكن محلي في ${widget.city.displayName}',
+                'Discover local stays in ${widget.city.displayName}',
+                'גלו אירוח מקומי ב-${widget.city.displayName}',
+              ),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              tr(
+                'اكتشف شقق وبيوت ضيافة وأماكن إقامة قريبة.',
+                'Discover apartments, guest houses and nearby stays.',
+                'גלו דירות, בתי הארחה ומקומות אירוח קרובים.',
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        tr(
+                          'إضافة السكن قريبًا',
+                          'Listing your place is coming soon',
+                          'הוספת מקום אירוח תהיה זמינה בקרוב',
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.add_home_outlined),
+                label: Text(
+                  tr(
+                    'أضف سكنك',
+                    'List your place',
+                    'הוספת מקום אירוח',
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
+            Text(
+              tr(
+                'أماكن متاحة',
+                'Available stays',
+                'מקומות זמינים',
+              ),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+
+            const SizedBox(height: 12),
+
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.all(40),
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (error != null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        tr(
+                          'تعذر تحميل أماكن السكن',
+                          'Could not load stays',
+                          'לא ניתן לטעון מקומות אירוח',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.tonal(
+                        onPressed: _loadStays,
+                        child: Text(
+                          tr(
+                            'حاول مرة ثانية',
+                            'Try again',
+                            'נסה שוב',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (stays.isEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.home_work_outlined,
+                        size: 52,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        tr(
+                          'ما لقينا أماكن سكن قريبة حاليًا',
+                          'No nearby stays found',
+                          'לא נמצאו מקומות אירוח קרובים',
+                        ),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ...stays.map(
+                (place) => Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: 12,
+                  ),
+                  child: PlaceCard(
+                    place: place,
+                    city: widget.city,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -879,7 +1693,11 @@ Future<String?> getCityImage(String cityName) async {
   }
 }
 
+
 // ============================================================
+// CITY SELECTOR
+// ============================================================
+
 // CITY SELECTOR
 // ============================================================
 
@@ -905,12 +1723,12 @@ class CitySelector extends StatelessWidget {
           final result = await Navigator.push<City>(
             context,
             MaterialPageRoute(
-              builder: (_) => CitySearchPage(currentCity: city),
+              builder: (_) => CitySearchPage(currentCity:city),
             ),
           );
 
           if (result != null) {
-            onChanged(result);
+          onChanged(result);
           }
         },
         child: Padding(
@@ -962,8 +1780,7 @@ class CitySelector extends StatelessWidget {
 
 // ============================================================
 // SEARCH BUTTON
-// ============================================================
-
+// ==================================================
 class SearchButton extends StatelessWidget {
   final City city;
 
@@ -974,38 +1791,69 @@ class SearchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => SearchPage(city: city),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SearchPage(city: city),
+            ),
+          );
+        },
+        child: Container(
+          height: 58,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 18,
           ),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color:
-              Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.search),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                tr(
-                  'ابحث عن مكان...',
-                  'Search for a place...',
-                  'חפש מקום...',
+          decoration: BoxDecoration(
+            color: const Color(0xFF40514B),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.10),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.search_rounded,
+                color: Colors.white70,
+                size: 25,
+              ),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Text(
+                  tr(
+                    'ابحث عن مكان...',
+                    'Search for a place...',
+                    'חפש מקום...',
+                  ),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 15,
+                  ),
                 ),
               ),
-            ),
-            const Icon(Icons.tune),
-          ],
+
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.tune_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1026,6 +1874,69 @@ class CategoryCard extends StatelessWidget {
     required this.onTap,
   });
 
+  String? get categoryImage {
+    switch (category.id) {
+      case 'restaurant':
+        return 'restaurant.png';
+      case 'cafe':
+        return 'cafe.png';
+      case 'fast_food':
+        return 'fast_food.png';
+      case 'bakery':
+        return 'bakery.png';
+      case 'supermarket':
+        return 'supermarket.png';
+      case 'shop':
+        return 'shop.png';
+      case 'clothes':
+        return 'Clothes.png';
+      case 'electronics':
+        return 'electronic.png';
+      case 'hotel':
+        return 'hotel.png';
+      case 'park':
+        return 'park.png';
+      case 'cinema':
+        return 'cinema.png';
+      case 'gym':
+        return 'gym.png';
+      case 'hospital':
+        return 'hospital.png';
+      case 'clinic':
+        return 'Clinic.png';
+      case 'pharmacy':
+        return 'pharmacy.png';
+      case 'dentist':
+        return 'Dental Clinic.png';
+      case 'doctor':
+        return 'doctor.png';
+      case 'veterinary':
+        return 'veterinary.png';
+      case 'fuel':
+        return 'fuel.png';
+      case 'barber':
+        return 'barber.png';
+      case 'bank':
+        return 'bank.png';
+      case 'atm':
+        return 'atm.png';
+      case 'mall':
+        return 'mall.png';
+      case 'mosque':
+        return 'mosque.png';
+      case 'church':
+        return 'church.png';
+      case 'school':
+        return 'school.png';
+      case 'university':
+        return 'university.png';
+      case 'parking':
+        return 'parking.png';
+      default:
+        return null;
+    }
+  }
+
   Color get categoryColor {
     switch (category.id) {
       case 'restaurant':
@@ -1034,96 +1945,108 @@ class CategoryCard extends StatelessWidget {
         return Colors.brown;
       case 'fast_food':
         return Colors.orange;
-      case 'bakery':
-        return Colors.deepOrange;
       case 'supermarket':
         return Colors.green;
-      case 'shop':
-        return Colors.pink;
-      case 'clothes':
-        return Colors.purple;
-      case 'electronics':
-        return Colors.blue;
-      case 'hotel':
-        return Colors.deepPurple;
-      case 'park':
-        return Colors.green;
-      case 'cinema':
-        return Colors.indigo;
-      case 'gym':
-        return Colors.orange;
-      case 'hospital':
-        return Colors.teal;
-      case 'clinic':
-        return Colors.cyan;
       case 'pharmacy':
-        return Colors.green;
-      case 'dentist':
-        return Colors.lightBlue;
-      case 'doctor':
         return Colors.teal;
       case 'fuel':
-        return Colors.green;
-      case 'barber':
-        return Colors.brown;
-      case 'bank':
+        return Colors.red;
+      case 'hotel':
         return Colors.blue;
-      case 'atm':
-        return Colors.blueGrey;
-      case 'mall':
-        return Colors.pink;
-      case 'mosque':
-        return Colors.green;
-      case 'church':
-        return Colors.deepPurple;
-      case 'school':
-        return Colors.orange;
-      case 'university':
-        return Colors.indigo;
-      case 'parking':
-        return Colors.blueGrey;
       default:
-        return Colors.blue;
+        return const Color(0xFF66765E);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final image = categoryImage;
+
     return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
       clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // CATEGORY BACKGROUND IMAGE
+            if (image != null)
+              Image.asset(
+                'assets/categories/$image',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: const Color(0xFF66765E),
+                  );
+                },
+              )
+            else
               Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: categoryColor,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  category.icon,
-                  size: 30,
-                  color: Colors.white,
+                color: const Color(0xFF66765E),
+              ),
+
+            // DARK GRADIENT
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Color(0xCC000000),
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                category.name,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+            ),
+
+            // CATEGORY ICON + NAME
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: categoryColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      category.icon,
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    category.name,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black54,
+                          blurRadius: 5,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1369,6 +2292,7 @@ class _PlacesPageState extends State<PlacesPage> {
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.category.name),
@@ -1729,6 +2653,9 @@ class PlacesService {
       case 'hotel':
         return 'accommodation.hotel';
 
+      case 'local_stay':
+       return 'accommodation.apartment,accommodation.guest_house,accommodation.hostel';
+
       case 'park':
         return 'leisure.park';
 
@@ -1752,6 +2679,9 @@ class PlacesService {
 
       case 'doctor':
         return 'healthcare.clinic_or_praxis.general';
+
+         case'veterinary':
+           return 'pet.veterinary';
 
       case 'fuel':
         return 'service.vehicle.fuel';
@@ -1814,6 +2744,7 @@ class PlacesService {
       'fuel',
       'hospital',
       'hotel',
+      'local_stay',
       'mall',
       'university',
     ].contains(id)) {
@@ -1916,6 +2847,203 @@ class PlaceCard extends StatefulWidget {
 }
 
 class _PlaceCardState extends State<PlaceCard> {
+  String formatDistance(double distance) {
+    if (distance < 1) {
+      final meters = (distance * 1000).round();
+      return '$meters ${tr('م', 'm', 'מ׳')}';
+    }
+
+    return '${distance.toStringAsFixed(1)} ${tr('كم', 'km', 'ק״מ')}';
+  }
+
+  String openingStatus(String hours) {
+    if (hours.trim().isEmpty) {
+      return '';
+    }
+
+    if (hours.trim() == '24/7') {
+      return tr(
+        'مفتوح الآن',
+        'Open now',
+        'פתוח עכשיו',
+      );
+    }
+
+    final now = DateTime.now();
+
+    final dayNames = <int, String>{
+      DateTime.monday: 'Mo',
+      DateTime.tuesday: 'Tu',
+      DateTime.wednesday: 'We',
+      DateTime.thursday: 'Th',
+      DateTime.friday: 'Fr',
+      DateTime.saturday: 'Sa',
+      DateTime.sunday: 'Su',
+    };
+
+    final today = dayNames[now.weekday];
+
+    if (today == null) {
+      return '';
+    }
+
+    try {
+      final parts = hours.split(';');
+
+      for (final part in parts) {
+        final trimmed = part.trim();
+
+        if (trimmed.isEmpty) {
+          continue;
+        }
+
+        final firstSpace = trimmed.indexOf(' ');
+
+        if (firstSpace == -1) {
+          continue;
+        }
+
+        final days = trimmed
+            .substring(0, firstSpace)
+            .trim();
+
+        final times = trimmed
+            .substring(firstSpace + 1)
+            .trim();
+
+        if (!_dayMatches(days, today)) {
+          continue;
+        }
+
+        if (times.toLowerCase() == 'off') {
+          return tr(
+            'مسكر الآن',
+            'Closed now',
+            'סגור עכשיו',
+          );
+        }
+
+        final ranges = times.split(',');
+
+        for (final range in ranges) {
+          if (_timeRangeIsOpen(range.trim(), now)) {
+            return tr(
+              'مفتوح الآن',
+              'Open now',
+              'פתוח עכשיו',
+            );
+          }
+        }
+
+        return tr(
+          'مسكر الآن',
+          'Closed now',
+          'סגור עכשיו',
+        );
+      }
+    } catch (_) {
+      return '';
+    }
+
+    return '';
+  }
+
+  bool _dayMatches(
+    String days,
+    String today,
+  ) {
+    if (days == today) {
+      return true;
+    }
+
+    if (!days.contains('-')) {
+      return false;
+    }
+
+    final parts = days.split('-');
+
+    if (parts.length != 2) {
+      return false;
+    }
+
+    const order = <String>[
+      'Mo',
+      'Tu',
+      'We',
+      'Th',
+      'Fr',
+      'Sa',
+      'Su',
+    ];
+
+    final start = order.indexOf(parts[0].trim());
+    final end = order.indexOf(parts[1].trim());
+    final current = order.indexOf(today);
+
+    if (start == -1 || end == -1 || current == -1) {
+      return false;
+    }
+
+    if (start <= end) {
+      return current >= start && current <= end;
+    }
+
+    return current >= start || current <= end;
+  }
+
+  bool _timeRangeIsOpen(
+    String range,
+    DateTime now,
+  ) {
+    final parts = range.split('-');
+
+    if (parts.length != 2) {
+      return false;
+    }
+
+    final start = _minutesFromTime(parts[0]);
+    final end = _minutesFromTime(parts[1]);
+
+    if (start == null || end == null) {
+      return false;
+    }
+
+    final current = now.hour * 60 + now.minute;
+
+    if (end >= start) {
+      return current >= start && current < end;
+    }
+
+    return current >= start || current < end;
+  }
+
+  int? _minutesFromTime(String time) {
+    final cleaned = time.trim();
+    final parts = cleaned.split(':');
+
+    if (parts.length != 2) {
+      return null;
+    }
+
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+
+    if (hour == null ||
+        minute == null ||
+        hour < 0 ||
+        hour > 24 ||
+        minute < 0 ||
+        minute > 59) {
+      return null;
+    }
+
+    if (hour == 24 && minute != 0) {
+      return null;
+    }
+
+    return hour * 60 + minute;
+  }
+
   @override
   Widget build(BuildContext context) {
     final distance = calculateDistance(
@@ -1925,10 +3053,34 @@ class _PlaceCardState extends State<PlaceCard> {
       widget.place.lon,
     );
 
-    final category = getCategory(widget.place.category);
+    final category = getCategory(
+      widget.place.category,
+    );
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+    final status = openingStatus(
+      widget.place.hours,
+    );
+
+    final isOpen = status ==
+        tr(
+          'مفتوح الآن',
+          'Open now',
+          'פתוח עכשיו',
+        );
+
+      return Card(
+  margin: const EdgeInsets.only(bottom: 12),
+  elevation: 0,
+  color: const Color(0xFF8f9d82),
+  clipBehavior: Clip.antiAlias,
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(18),
+    side: BorderSide(
+      color: Colors.white.withValues(alpha: 0.22),
+      width: 1,
+    ),
+  ),
+
       child: InkWell(
         onTap: () {
           Navigator.push(
@@ -1940,18 +3092,24 @@ class _PlaceCardState extends State<PlaceCard> {
               ),
             ),
           ).then((_) {
-            if (mounted) setState(() {});
+            if (mounted) {
+              setState(() {});
+            }
           });
         },
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              PlaceImage(
-                place: widget.place,
-                size: 85,
-              ),
+             ClipRRect(
+  borderRadius: BorderRadius.circular(14),
+  child: PlaceImage(
+    place: widget.place,
+    size: 90,
+  ),
+),
               const SizedBox(width: 12),
+
               Expanded(
                 child: Column(
                   crossAxisAlignment:
@@ -1962,25 +3120,65 @@ class _PlaceCardState extends State<PlaceCard> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
+                        height: 1.2,
                       ),
                     ),
+
                     const SizedBox(height: 5),
+
                     Row(
                       children: [
-                        Icon(category.icon, size: 16),
+                        Icon(
+                          category.icon,
+                          size: 16,
+                        ),
                         const SizedBox(width: 5),
                         Expanded(
                           child: Text(
                             category.name,
                             maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            overflow:
+                                TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
+
                     const SizedBox(height: 5),
+
+                    if (status.isNotEmpty) ...[
+                      Container(
+                        padding:
+                            const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: (
+                            isOpen
+                                ? Colors.green
+                                : Colors.red
+                          ).withValues(alpha: 0.12),
+                          borderRadius:
+                              BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          status,
+                          style: TextStyle(
+                            color: isOpen
+                                ? Colors.green
+                                : Colors.red,
+                            fontSize: 12,
+                            fontWeight:
+                                FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                    ],
+
                     Row(
                       children: [
                         const Icon(
@@ -1988,9 +3186,11 @@ class _PlaceCardState extends State<PlaceCard> {
                           size: 15,
                         ),
                         const SizedBox(width: 3),
+
                         Text(
-                          '${distance.toStringAsFixed(1)} km',
+                          formatDistance(distance),
                         ),
+
                         if (widget.place.rating > 0) ...[
                           const SizedBox(width: 10),
                           const Icon(
@@ -2000,7 +3200,8 @@ class _PlaceCardState extends State<PlaceCard> {
                           ),
                           const SizedBox(width: 3),
                           Text(
-                            widget.place.rating.toStringAsFixed(1),
+                            widget.place.rating
+                                .toStringAsFixed(1),
                           ),
                         ],
                       ],
@@ -2008,20 +3209,26 @@ class _PlaceCardState extends State<PlaceCard> {
                   ],
                 ),
               ),
+
               IconButton(
                 icon: Icon(
                   widget.place.isFavorite
                       ? Icons.favorite
                       : Icons.favorite_border,
-                  color:
-                      widget.place.isFavorite ? Colors.red : null,
+                  color: widget.place.isFavorite
+                      ? Colors.red
+                      : null,
                 ),
                 onPressed: () {
                   setState(() {
                     if (widget.place.isFavorite) {
-                      favoriteIds.remove(widget.place.id);
+                      favoriteIds.remove(
+                        widget.place.id,
+                      );
                     } else {
-                      favoriteIds.add(widget.place.id);
+                      favoriteIds.add(
+                        widget.place.id,
+                      );
                     }
                   });
                 },
@@ -2160,7 +3367,6 @@ class _PlaceImageState extends State<PlaceImage> {
 // ============================================================
 // DETAILS
 // ============================================================
-
 class PlaceDetailsPage extends StatefulWidget {
   final Place place;
   final City city;
@@ -2176,8 +3382,7 @@ class PlaceDetailsPage extends StatefulWidget {
       _PlaceDetailsPageState();
 }
 
-class _PlaceDetailsPageState
-    extends State<PlaceDetailsPage> {
+class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
   Future<void> callPlace() async {
     if (widget.place.phone.isEmpty) {
       showMessage(
@@ -2190,14 +3395,17 @@ class _PlaceDetailsPageState
       return;
     }
 
-    final phone =
-        widget.place.phone.replaceAll(' ', '');
+    final phone = widget.place.phone.replaceAll(' ', '');
 
-    await launchUrl(Uri.parse('tel:$phone'));
+    await launchUrl(
+      Uri.parse('tel:$phone'),
+    );
   }
 
   Future<void> openWebsite() async {
-    if (widget.place.website.isEmpty) return;
+    if (widget.place.website.isEmpty) {
+      return;
+    }
 
     var url = widget.place.website.trim();
 
@@ -2214,13 +3422,35 @@ class _PlaceDetailsPageState
 
   void showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+      ),
     );
+  }
+
+  String formatDistance(double distance) {
+    if (distance < 1) {
+      final meters = (distance * 1000).round();
+
+      return '$meters ${tr('م', 'm', 'מ׳')}';
+    }
+
+    return '${distance.toStringAsFixed(1)} '
+        '${tr('كم', 'km', 'ק״מ')}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final category = getCategory(widget.place.category);
+    final category = getCategory(
+      widget.place.category,
+    );
+
+    final distance = calculateDistance(
+      widget.city.lat,
+      widget.city.lon,
+      widget.place.lat,
+      widget.place.lon,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -2233,120 +3463,380 @@ class _PlaceDetailsPageState
         ),
         actions: [
           IconButton(
+            tooltip: tr(
+              'المفضلة',
+              'Favorite',
+              'מועדפים',
+            ),
             icon: Icon(
               widget.place.isFavorite
                   ? Icons.favorite
                   : Icons.favorite_border,
-              color:
-                  widget.place.isFavorite ? Colors.red : null,
+              color: widget.place.isFavorite
+                  ? Colors.red
+                  : null,
             ),
             onPressed: () {
               setState(() {
                 if (widget.place.isFavorite) {
-                  favoriteIds.remove(widget.place.id);
+                  favoriteIds.remove(
+                    widget.place.id,
+                  );
                 } else {
-                  favoriteIds.add(widget.place.id);
+                  favoriteIds.add(
+                    widget.place.id,
+                  );
                 }
               });
             },
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          PlaceImage(
-            place: widget.place,
-            size: 180,
+
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 700,
           ),
-          const SizedBox(height: 18),
-          Text(
-            widget.place.name,
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Row(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              32,
+            ),
             children: [
-              Icon(category.icon),
-              const SizedBox(width: 8),
-              Text(category.name),
+              // =========================
+              // HERO IMAGE
+              // =========================
+              ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: SizedBox(
+                  height: 280,
+                  width: double.infinity,
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    clipBehavior: Clip.hardEdge,
+                    child: PlaceImage(
+                      place: widget.place,
+                      size: 280,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 22),
+
+              // =========================
+              // NAME
+              // =========================
+              Text(
+                widget.place.name,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineMedium
+                    ?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // =========================
+              // QUICK INFO
+              // =========================
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _InfoChip(
+                    icon: category.icon,
+                    text: category.name,
+                  ),
+
+                  _InfoChip(
+                    icon: Icons.near_me_outlined,
+                    text: formatDistance(
+                      distance,
+                    ),
+                  ),
+
+                  if (widget.place.rating > 0)
+                    _InfoChip(
+                      icon: Icons.star_rounded,
+                      text: widget.place.rating
+                          .toStringAsFixed(1),
+                    ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // =========================
+              // DETAILS CARD
+              // =========================
+              if (widget.place.address.isNotEmpty ||
+                  widget.place.phone.isNotEmpty ||
+                  widget.place.hours.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerLow,
+                    borderRadius:
+                        BorderRadius.circular(22),
+                    border: Border.all(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outlineVariant,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      if (widget.place.address.isNotEmpty)
+                        _ModernDetailRow(
+                          icon: Icons.location_on_outlined,
+                          title: tr(
+                            'العنوان',
+                            'Address',
+                            'כתובת',
+                          ),
+                          value: widget.place.address,
+                        ),
+
+                      if (widget.place.address.isNotEmpty &&
+                          (widget.place.phone.isNotEmpty ||
+                              widget.place.hours.isNotEmpty))
+                        const Divider(height: 28),
+
+                      if (widget.place.phone.isNotEmpty)
+                        _ModernDetailRow(
+                          icon: Icons.phone_outlined,
+                          title: tr(
+                            'الهاتف',
+                            'Phone',
+                            'טלפון',
+                          ),
+                          value: widget.place.phone,
+                        ),
+
+                      if (widget.place.phone.isNotEmpty &&
+                          widget.place.hours.isNotEmpty)
+                        const Divider(height: 28),
+
+                      if (widget.place.hours.isNotEmpty)
+                        _ModernDetailRow(
+                          icon: Icons.schedule_rounded,
+                          title: tr(
+                            'ساعات العمل',
+                            'Opening hours',
+                            'שעות פתיחה',
+                          ),
+                          value: widget.place.hours,
+                        ),
+                    ],
+                  ),
+                ),
+
+              const SizedBox(height: 22),
+
+              // =========================
+              // MAIN MAP BUTTON
+              // =========================
+              SizedBox(
+                height: 54,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    openGoogleMaps(
+                      widget.place,
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.directions_rounded,
+                  ),
+                  label: Text(
+                    tr(
+                      'الاتجاهات',
+                      'Directions',
+                      'ניווט',
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // =========================
+              // CALL + WEBSITE
+              // =========================
+              if (widget.place.phone.isNotEmpty ||
+                  widget.place.website.isNotEmpty)
+                Row(
+                  children: [
+                    if (widget.place.phone.isNotEmpty)
+                      Expanded(
+                        child: SizedBox(
+                          height: 50,
+                          child: OutlinedButton.icon(
+                            onPressed: callPlace,
+                            icon: const Icon(
+                              Icons.phone_rounded,
+                            ),
+                            label: Text(
+                              tr(
+                                'اتصال',
+                                'Call',
+                                'התקשר',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    if (widget.place.phone.isNotEmpty &&
+                        widget.place.website.isNotEmpty)
+                      const SizedBox(width: 10),
+
+                    if (widget.place.website.isNotEmpty)
+                      Expanded(
+                        child: SizedBox(
+                          height: 50,
+                          child: OutlinedButton.icon(
+                            onPressed: openWebsite,
+                            icon: const Icon(
+                              Icons.language_rounded,
+                            ),
+                            label: Text(
+                              tr(
+                                'الموقع',
+                                'Website',
+                                'אתר',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
             ],
           ),
-          if (widget.place.rating > 0) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(
-                  Icons.star,
-                  color: Colors.amber,
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  widget.place.rating.toStringAsFixed(1),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 20),
-          if (widget.place.address.isNotEmpty)
-            DetailRow(
-              icon: Icons.location_on,
-              title: tr('العنوان', 'Address', 'כתובת'),
-              value: widget.place.address,
-            ),
-          if (widget.place.phone.isNotEmpty)
-            DetailRow(
-              icon: Icons.phone,
-              title: tr('الهاتف', 'Phone', 'טלפון'),
-              value: widget.place.phone,
-            ),
-          if (widget.place.hours.isNotEmpty)
-            DetailRow(
-              icon: Icons.access_time,
-              title: tr(
-                'ساعات العمل',
-                'Opening hours',
-                'שעות פתיחה',
-              ),
-              value: widget.place.hours,
-            ),
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: () {
-              openGoogleMaps(widget.place);
-            },
-            icon: const Icon(Icons.map),
-            label: Text(
-              tr(
-                'فتح في Google Maps',
-                'Open in Google Maps',
-                'פתח ב-Google Maps',
-              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _InfoChip({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
             ),
           ),
-          if (widget.place.phone.isNotEmpty)
-            OutlinedButton.icon(
-              onPressed: callPlace,
-              icon: const Icon(Icons.phone),
-              label: Text(
-                tr('اتصال', 'Call', 'התקשר'),
-              ),
-            ),
-          if (widget.place.website.isNotEmpty)
-            OutlinedButton.icon(
-              onPressed: openWebsite,
-              icon: const Icon(Icons.language),
-              label: Text(
-                tr('الموقع الإلكتروني', 'Website', 'אתר'),
-              ),
-            ),
         ],
       ),
+    );
+  }
+}
+
+class _ModernDetailRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+
+  const _ModernDetailRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: Theme.of(context)
+                .colorScheme
+                .primaryContainer,
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(
+            icon,
+            size: 21,
+            color: Theme.of(context)
+                .colorScheme
+                .onPrimaryContainer,
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        Expanded(
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium
+                    ?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant,
+                    ),
+              ),
+
+              const SizedBox(height: 3),
+
+              Text(
+                value,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2445,7 +3935,7 @@ class MapPage extends StatelessWidget {
   }
 }
 
-class OSMMapView extends StatelessWidget {
+class OSMMapView extends StatefulWidget {
   final City city;
   final List<Place> places;
 
@@ -2456,63 +3946,374 @@ class OSMMapView extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    const zoom = 12;
+  State<OSMMapView> createState() => _OSMMapViewState();
+}
 
+class _OSMMapViewState extends State<OSMMapView> {
+  final MapController _mapController = MapController();
+
+  Position? _currentPosition;
+  bool _loadingLocation = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentLocation();
+  }
+
+  Future<void> _loadCurrentLocation({
+    bool moveMap = false,
+  }) async {
+    if (_loadingLocation) {
+      return;
+    }
+
+    setState(() {
+      _loadingLocation = true;
+    });
+
+    final position =
+        await CurrentLocationService.getCurrentLocation();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _currentPosition = position;
+      _loadingLocation = false;
+    });
+
+    if (moveMap && position != null) {
+      _mapController.move(
+        LatLng(
+          position.latitude,
+          position.longitude,
+        ),
+        16,
+      );
+    }
+  }
+
+  void _goToMyLocation() {
+    final position = _currentPosition;
+
+    if (position != null) {
+      _mapController.move(
+        LatLng(
+          position.latitude,
+          position.longitude,
+        ),
+        16,
+      );
+      return;
+    }
+
+    _loadCurrentLocation(
+      moveMap: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Stack(
       children: [
-        Positioned.fill(
-          child: Image.network(
-            'https://tile.openstreetmap.org/$zoom/'
-            '${_tileX(city.lon, zoom)}/'
-            '${_tileY(city.lat, zoom)}.png',
-            fit: BoxFit.cover,
-            errorBuilder: (
-              context,
-              error,
-              stackTrace,
-            ) {
-              return Center(
-                child: Text(
-                  tr(
-                    'تعذر تحميل الخريطة',
-                    'Could not load map',
-                    'לא ניתן לטעון את המפה',
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: LatLng(
+              widget.city.lat,
+              widget.city.lon,
+            ),
+            initialZoom: 14,
+          ),
+          children: [
+            TileLayer(
+              urlTemplate:
+                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.localpal.app',
+            ),
+
+            MarkerLayer(
+              markers: [
+                ...widget.places.map(
+                  (place) => Marker(
+                    point: LatLng(
+                      place.lat,
+                      place.lon,
+                    ),
+                    width: 46,
+                    height: 46,
+                    child: GestureDetector(
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          showDragHandle: true,
+                          builder: (sheetContext) {
+                            final category =
+                                getCategory(
+                              place.category,
+                            );
+
+                            return SafeArea(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(
+                                  20,
+                                  4,
+                                  20,
+                                  20,
+                                ),
+                                child: Column(
+                                  mainAxisSize:
+                                      MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 48,
+                                          height: 48,
+                                          decoration:
+                                              BoxDecoration(
+                                            color: Theme.of(
+                                              context,
+                                            )
+                                                .colorScheme
+                                                .primaryContainer,
+                                            borderRadius:
+                                                BorderRadius.circular(
+                                              14,
+                                            ),
+                                          ),
+                                          child: Icon(
+                                            category.icon,
+                                            color: Theme.of(
+                                              context,
+                                            )
+                                                .colorScheme
+                                                .onPrimaryContainer,
+                                          ),
+                                        ),
+                                        const SizedBox(
+                                          width: 12,
+                                        ),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment
+                                                    .start,
+                                            children: [
+                                              Text(
+                                                place.name,
+                                                maxLines: 2,
+                                                overflow:
+                                                    TextOverflow
+                                                        .ellipsis,
+                                                style:
+                                                    const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight:
+                                                      FontWeight
+                                                          .w700,
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                height: 3,
+                                              ),
+                                              Text(
+                                                category.name,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    if (place
+                                        .address
+                                        .isNotEmpty) ...[
+                                      const SizedBox(
+                                        height: 16,
+                                      ),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons
+                                                .location_on_outlined,
+                                            size: 19,
+                                          ),
+                                          const SizedBox(
+                                            width: 7,
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              place.address,
+                                              maxLines: 2,
+                                              overflow:
+                                                  TextOverflow
+                                                      .ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+
+                                    const SizedBox(
+                                      height: 18,
+                                    ),
+
+                                    SizedBox(
+                                      width:
+                                          double.infinity,
+                                      height: 50,
+                                      child:
+                                          FilledButton.icon(
+                                        onPressed: () {
+                                          Navigator.pop(
+                                            sheetContext,
+                                          );
+
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  PlaceDetailsPage(
+                                                place: place,
+                                                city:
+                                                    widget.city,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(
+                                          Icons
+                                              .arrow_forward_rounded,
+                                        ),
+                                        label: Text(
+                                          tr(
+                                            'عرض المكان',
+                                            'View place',
+                                            'הצג מקום',
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary,
+                          shape: BoxShape.circle,
+                          boxShadow: const [
+                            BoxShadow(
+                              blurRadius: 6,
+                              offset: Offset(0, 2),
+                              color: Color(
+                                0x33000000,
+                              ),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          getCategory(
+                            place.category,
+                          ).icon,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onPrimary,
+                          size: 23,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              );
-            },
-          ),
+
+                if (_currentPosition != null)
+                  Marker(
+                    point: LatLng(
+                      _currentPosition!.latitude,
+                      _currentPosition!.longitude,
+                    ),
+                    width: 34,
+                    height: 34,
+                    child: Container(
+                      padding:
+                          const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: const [
+                          BoxShadow(
+                            blurRadius: 8,
+                            color: Color(
+                              0x44000000,
+                            ),
+                          ),
+                        ],
+                      ),
+                      child: Container(
+                        decoration:
+                            const BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+
+            RichAttributionWidget(
+              attributions: const [
+                TextSourceAttribution(
+                  'OpenStreetMap contributors',
+                ),
+              ],
+            ),
+          ],
         ),
-        const Center(
-          child: Icon(
-            Icons.location_on,
-            size: 48,
-            color: Colors.red,
+
+        Positioned(
+          right: 16,
+          bottom: 28,
+          child: FloatingActionButton.small(
+            heroTag: 'my_location_map',
+            onPressed: _loadingLocation
+                ? null
+                : _goToMyLocation,
+            tooltip: tr(
+              'موقعي',
+              'My location',
+              'המיקום שלי',
+            ),
+            child: _loadingLocation
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child:
+                        CircularProgressIndicator(
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(
+                    Icons.my_location_rounded,
+                  ),
           ),
         ),
       ],
     );
   }
-
-  int _tileX(double lon, int zoom) {
-    final n = pow(2, zoom).toDouble();
-    return ((lon + 180) / 360 * n).floor();
-  }
-
-  int _tileY(double lat, int zoom) {
-    final latRad = lat * pi / 180;
-    final n = pow(2, zoom).toDouble();
-
-    final y = (1 -
-            log(tan(latRad) + 1 / cos(latRad)) / pi) /
-        2 *
-        n;
-
-    return y.floor();
-  }
 }
-
 // ============================================================
 // SEARCH
 // ============================================================
@@ -3161,36 +4962,64 @@ class _CurrentLocationButtonState
   }
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton.icon(
-        onPressed: loading ? null : getLocation,
-        icon: loading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                ),
-              )
-            : const Icon(Icons.my_location),
-        label: Text(
-          loading
-              ? tr(
-                  'جاري تحديد الموقع...',
-                  'Finding location...',
-                  'מאתר מיקום...',
-                )
-              : tr(
-                  'استخدم موقعي الحالي',
-                  'Use my current location',
-                  'השתמש במיקום הנוכחי שלי',
-                ),
+Widget build(BuildContext context) {
+  return SizedBox(
+    width: double.infinity,
+    height: 58,
+    child: FilledButton(
+      onPressed: loading ? null : getLocation,
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFF4F7A58),
+        foregroundColor: Colors.white,
+        disabledBackgroundColor:
+            const Color(0xFF4F7A58).withValues(alpha: 0.55),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
         ),
+        elevation: 0,
       ),
-    );
-  }
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (loading)
+            const SizedBox(
+              width: 21,
+              height: 21,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          else
+            const Icon(
+              Icons.my_location_rounded,
+              size: 22,
+            ),
+
+          const SizedBox(width: 10),
+
+          Text(
+            loading
+                ? tr(
+                    'جاري تحديد الموقع...',
+                    'Finding location...',
+                    'מאתר מיקום...',
+                  )
+                : tr(
+                    'استخدم موقعي الحالي',
+                    'Use my current location',
+                    'השתמש במיקום הנוכחי שלי',
+                  ),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 }
 
 // ============================================================
